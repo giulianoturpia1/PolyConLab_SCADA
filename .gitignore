@@ -1,41 +1,34 @@
-# Prerequisites
-*.d
+# Virtual environment
+.venv/
+venv/
+env/
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
 
-# Precompiled Headers
-*.gch
-*.pch
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
 
-# Linker files
-*.ilk
+# PyInstaller
+# (keep installer/*.spec — it is committed to the repo)
+installer/Output/
 
-# Debugger Files
-*.pdb
+# Generated UI modules (produced by build_ui.py, not committed)
+src/ui/*_ui.py
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+# Ruff cache
+.ruff_cache/
 
-# Fortran module files
-*.mod
-*.smod
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# OS
+.DS_Store
+Thumbs.db
