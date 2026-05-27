@@ -19,6 +19,8 @@ a = Analysis(
     binaries=binaries_pyside6,
     datas=[
         *datas_pyside6,
+        # Bundle the images folder so the logo is available at runtime.
+        ("../assets/images", "assets/images"),
     ],
     hiddenimports=hiddenimports_pyside6,
     hookspath=[],

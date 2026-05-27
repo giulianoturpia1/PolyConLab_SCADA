@@ -1,4 +1,4 @@
-# Virtual environment
+# Virtual Environment
 .venv/
 venv/
 env/
@@ -8,7 +8,7 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# Distribution / packaging
+# Distribution / Packaging
 dist/
 build/
 *.egg-info/
@@ -17,13 +17,17 @@ build/
 # (keep installer/*.spec — it is committed to the repo)
 installer/Output/
 
-# Generated UI modules (produced by build_ui.py, not committed)
+# InstallForge Project (created locally, not committed)
+installer/*.ifp
+installer/*.exe
+
+# Generated UI Modules (produced by build_ui.py, not committed)
 src/ui/*_ui.py
 
 # Ruff cache
 .ruff_cache/
 
-# IDE / editor
+# IDE / Editor
 .vscode/
 .idea/
 *.swp

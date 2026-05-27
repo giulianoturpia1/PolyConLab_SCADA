@@ -6,7 +6,7 @@
    <rect><x>0</x><y>0</y><width>1280</width><height>800</height></rect>
   </property>
   <property name="minimumSize">
-   <size><width>1280</width><height>760</height></size>
+   <size><width>1280</width><height>600</height></size>
   </property>
   <property name="windowTitle">
    <string>PolyConLab SCADA</string>
@@ -135,6 +135,29 @@ QSlider::sub-page:horizontal:disabled {
 }
 QSlider::handle:horizontal:disabled {
     background: #5C6370;
+}
+QMenuBar {
+    background-color: #181B22;
+    color: #EFEFEF;
+    border-bottom: 1px solid #3D4452;
+    padding: 2px 8px;
+    font-size: 13px;
+}
+QMenuBar::item:selected {
+    background-color: #282C34;
+    border-radius: 4px;
+}
+QMenu {
+    background-color: #282C34;
+    color: #EFEFEF;
+    border: 1px solid #3D4452;
+    padding: 4px 0;
+}
+QMenu::item {
+    padding: 6px 20px 6px 12px;
+}
+QMenu::item:selected {
+    background-color: #353A47;
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
@@ -156,8 +179,16 @@ QSlider::handle:horizontal:disabled {
        <property name="bottomMargin"><number>0</number></property>
        <property name="spacing"><number>10</number></property>
        <item>
+        <widget class="QLabel" name="lbl_logo">
+         <property name="minimumSize"><size><width>36</width><height>36</height></size></property>
+         <property name="maximumSize"><size><width>36</width><height>36</height></size></property>
+         <property name="text"><string/></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+        </widget>
+       </item>
+       <item>
         <widget class="QLabel" name="lbl_title">
-         <property name="text"><string>⬡  PolyConLab SCADA</string></property>
+         <property name="text"><string>PolyConLab SCADA</string></property>
          <property name="styleSheet"><string notr="true">color: #EFEFEF; font-size: 16px; font-weight: bold;</string></property>
         </widget>
        </item>
@@ -166,18 +197,6 @@ QSlider::handle:horizontal:disabled {
          <property name="orientation"><enum>Qt::Horizontal</enum></property>
          <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
         </spacer>
-       </item>
-       <item>
-        <widget class="QLabel" name="lbl_host_prefix">
-         <property name="text"><string>Host:</string></property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLineEdit" name="inp_host">
-         <property name="minimumSize"><size><width>130</width><height>0</height></size></property>
-         <property name="maximumSize"><size><width>130</width><height>16777215</height></size></property>
-         <property name="text"><string>192.168.1.1</string></property>
-        </widget>
        </item>
        <item>
         <widget class="QPushButton" name="btn_connect">
@@ -230,7 +249,7 @@ QSlider::handle:horizontal:disabled {
           <property name="spacing"><number>10</number></property>
           <item>
            <widget class="QGroupBox" name="grp_state">
-            <property name="title"><string>Estado del sistema</string></property>
+            <property name="title"><string>Estado del Sistema</string></property>
             <layout class="QVBoxLayout" name="vbox_state">
              <item>
               <widget class="QLabel" name="lbl_state">
@@ -249,31 +268,31 @@ QSlider::handle:horizontal:disabled {
              <property name="spacing"><number>6</number></property>
              <item>
               <widget class="QPushButton" name="btn_pause">
-               <property name="text"><string>⏸  Pausar</string></property>
+               <property name="text"><string>Pausar</string></property>
                <property name="enabled"><bool>false</bool></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_resume">
-               <property name="text"><string>▶  Reanudar</string></property>
+               <property name="text"><string>Reanudar</string></property>
                <property name="enabled"><bool>false</bool></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_estop">
-               <property name="text"><string>⚠  E-STOP</string></property>
+               <property name="text"><string>E-STOP</string></property>
                <property name="enabled"><bool>false</bool></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_ack">
-               <property name="text"><string>✓  Ack. Falla</string></property>
+               <property name="text"><string>Ack. Falla</string></property>
                <property name="enabled"><bool>false</bool></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_retry">
-               <property name="text"><string>↺  Retry Checkup</string></property>
+               <property name="text"><string>Retry Checkup</string></property>
                <property name="enabled"><bool>false</bool></property>
               </widget>
              </item>
@@ -305,7 +324,7 @@ QSlider::handle:horizontal:disabled {
           <property name="spacing"><number>10</number></property>
           <item>
            <widget class="QGroupBox" name="grp_readings">
-            <property name="title"><string>Lecturas en tiempo real</string></property>
+            <property name="title"><string>Lecturas en Tiempo Real</string></property>
             <layout class="QHBoxLayout" name="hbox_readings">
              <property name="spacing"><number>8</number></property>
              <item>
@@ -343,7 +362,7 @@ QSlider::handle:horizontal:disabled {
           </item>
           <item>
            <widget class="QGroupBox" name="grp_chart">
-            <property name="title"><string>Historial de temperatura</string></property>
+            <property name="title"><string>Historial de Temperatura</string></property>
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
               <horstretch>0</horstretch>
@@ -388,7 +407,7 @@ QSlider::handle:horizontal:disabled {
           <property name="bottomMargin"><number>0</number></property>
           <item>
            <widget class="QGroupBox" name="grp_ctrl">
-            <property name="title"><string>Control de actuadores</string></property>
+            <property name="title"><string>Control de Actuadores</string></property>
             <layout class="QVBoxLayout" name="vbox_ctrl">
              <property name="spacing"><number>6</number></property>
              <item>
@@ -500,59 +519,29 @@ QSlider::handle:horizontal:disabled {
       </layout>
      </widget>
     </item>
-    <item>
-     <widget class="QFrame" name="sep_footer">
-      <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
-      <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
-      <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
-      <property name="frameShape"><enum>QFrame::HLine</enum></property>
-      <property name="frameShadow"><enum>QFrame::Plain</enum></property>
-     </widget>
-    </item>
-    <item>
-     <widget class="QWidget" name="panel_log">
-      <property name="minimumSize"><size><width>0</width><height>155</height></size></property>
-      <property name="maximumSize"><size><width>16777215</width><height>155</height></size></property>
-      <layout class="QHBoxLayout" name="hbox_log">
-       <property name="leftMargin"><number>10</number></property>
-       <property name="topMargin"><number>6</number></property>
-       <property name="rightMargin"><number>10</number></property>
-       <property name="bottomMargin"><number>10</number></property>
-       <property name="spacing"><number>8</number></property>
-       <item>
-        <widget class="QGroupBox" name="grp_log">
-         <property name="title"><string>Registro de eventos</string></property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-           <horstretch>1</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <layout class="QVBoxLayout" name="vbox_log">
-          <property name="leftMargin"><number>6</number></property>
-          <property name="topMargin"><number>4</number></property>
-          <property name="rightMargin"><number>6</number></property>
-          <property name="bottomMargin"><number>4</number></property>
-          <item>
-           <widget class="QPlainTextEdit" name="log_view">
-            <property name="readOnly"><bool>true</bool></property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item alignment="Qt::AlignBottom">
-        <widget class="QPushButton" name="btn_clear">
-         <property name="minimumSize"><size><width>80</width><height>28</height></size></property>
-         <property name="maximumSize"><size><width>80</width><height>28</height></size></property>
-         <property name="text"><string>Limpiar</string></property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </item>
    </layout>
   </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect><x>0</x><y>0</y><width>1280</width><height>22</height></rect>
+   </property>
+   <widget class="QMenu" name="menu_avanzado">
+    <property name="title"><string>Avanzado</string></property>
+    <addaction name="action_log"/>
+   </widget>
+   <widget class="QMenu" name="menu_configuracion">
+    <property name="title"><string>Configuración</string></property>
+    <addaction name="action_connection"/>
+   </widget>
+   <addaction name="menu_avanzado"/>
+   <addaction name="menu_configuracion"/>
+  </widget>
+  <action name="action_log">
+   <property name="text"><string>Logs</string></property>
+  </action>
+  <action name="action_connection">
+   <property name="text"><string>Conexión...</string></property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
@@ -587,16 +576,6 @@ QSlider::handle:horizontal:disabled {
    <signal>valueChanged(int)</signal>
    <receiver>heater_slider</receiver>
    <slot>setValue(int)</slot>
-   <hints>
-    <hint type="sourcelabel"><x>-1</x><y>-1</y></hint>
-    <hint type="destinationlabel"><x>-1</x><y>-1</y></hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>btn_clear</sender>
-   <signal>clicked()</signal>
-   <receiver>log_view</receiver>
-   <slot>clear()</slot>
    <hints>
     <hint type="sourcelabel"><x>-1</x><y>-1</y></hint>
     <hint type="destinationlabel"><x>-1</x><y>-1</y></hint>

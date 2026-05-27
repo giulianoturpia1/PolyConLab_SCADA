@@ -30,6 +30,7 @@ class TemperatureChart:
     WINDOW = 60  # number of data points visible at once
 
     def __init__(self, chart_view: QChartView, toggles_container: QWidget) -> None:
+        """Build the chart and toggle buttons, then attach them to the provided widgets."""
         self._t = 0
         self._series: list[QLineSeries] = []
 
@@ -42,6 +43,7 @@ class TemperatureChart:
     # ── Internal setup ───────────────────────────────────────────────────────
 
     def _build_chart(self) -> QChart:
+        """Create the QChart with all four series and both axes; return the configured chart."""
         chart = QChart()
         chart.setBackgroundBrush(QColor(col.PANEL))
         chart.setPlotAreaBackgroundBrush(QColor(col.BG))
@@ -81,6 +83,7 @@ class TemperatureChart:
         return chart
 
     def _build_toggles(self, container: QWidget) -> None:
+        """Populate the container widget with one checkable toggle button per series."""
         lay = QHBoxLayout(container)
         lay.setContentsMargins(4, 2, 4, 2)
         lay.setSpacing(6)
