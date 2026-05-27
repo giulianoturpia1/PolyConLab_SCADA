@@ -16,8 +16,19 @@ from pathlib import Path
 UI_SRC = Path("assets/ui")
 UI_DST = Path("src/ui")
 
+# Resolve pyside6-uic from the same Python environment that is running this
+# script, so it works inside a venv without needing the venv to be on PATH.
+_UIC = Path(sys.executable).parent / "pyside6-uic"
+if sys.platform == "win32":
+    _UIC = _UIC.with_suffix(".exe")
+
 
 def main() -> None:
+    if not _UIC.exists():
+        print(f"pyside6-uic not found at {_UIC}")
+        print("Run this script with the project venv active:  .venv\\Scripts\\python build_ui.py")
+        sys.exit(1)
+
     ui_files = sorted(UI_SRC.glob("*.ui"))
     if not ui_files:
         print(f"No .ui files found in {UI_SRC}/")
@@ -29,7 +40,7 @@ def main() -> None:
     for ui_file in ui_files:
         out_file = UI_DST / f"{ui_file.stem}_ui.py"
         result = subprocess.run(
-            ["pyside6-uic", str(ui_file), "-o", str(out_file)],
+            [str(_UIC), str(ui_file), "-o", str(out_file)],
             capture_output=True,
             text=True,
         )

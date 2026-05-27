@@ -32,3 +32,6 @@ src/ui/*_ui.py
 # OS
 .DS_Store
 Thumbs.db
+
+# PysSide6 Generated Files
+src/ui/*_ui.py
