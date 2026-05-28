@@ -328,32 +328,32 @@ QMenu::item:selected {
             <layout class="QHBoxLayout" name="hbox_readings">
              <property name="spacing"><number>8</number></property>
              <item>
-              <widget class="_SensorCard" name="card_tin">
+              <widget class="SensorCard" name="card_tin">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
              <item>
-              <widget class="_SensorCard" name="card_tout">
+              <widget class="SensorCard" name="card_tout">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
              <item>
-              <widget class="_SensorCard" name="card_tcam">
+              <widget class="SensorCard" name="card_tcam">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
              <item>
-              <widget class="_SensorCard" name="card_tmez">
+              <widget class="SensorCard" name="card_tmez">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
              <item>
-              <widget class="_SensorCard" name="card_flow">
+              <widget class="SensorCard" name="card_flow">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
              <item>
-              <widget class="_SensorCard" name="card_lvl">
+              <widget class="SensorCard" name="card_lvl">
                <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
               </widget>
              </item>
@@ -411,7 +411,7 @@ QMenu::item:selected {
             <layout class="QVBoxLayout" name="vbox_ctrl">
              <property name="spacing"><number>6</number></property>
              <item>
-              <widget class="_ActuatorRow" name="row_heater"/>
+              <widget class="ActuatorRow" name="row_heater"/>
              </item>
              <item>
               <widget class="QWidget" name="heater_setpoint_row">
@@ -460,7 +460,7 @@ QMenu::item:selected {
               </widget>
              </item>
              <item>
-              <widget class="_ActuatorRow" name="row_pump"/>
+              <widget class="ActuatorRow" name="row_pump"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act2">
@@ -472,7 +472,7 @@ QMenu::item:selected {
               </widget>
              </item>
              <item>
-              <widget class="_ActuatorRow" name="row_chiller"/>
+              <widget class="ActuatorRow" name="row_chiller"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act3">
@@ -484,7 +484,7 @@ QMenu::item:selected {
               </widget>
              </item>
              <item>
-              <widget class="_ActuatorRow" name="row_valve1"/>
+              <widget class="ActuatorRow" name="row_valve1"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act4">
@@ -496,7 +496,7 @@ QMenu::item:selected {
               </widget>
              </item>
              <item>
-              <widget class="_ActuatorRow" name="row_valve2"/>
+              <widget class="ActuatorRow" name="row_valve2"/>
              </item>
              <item>
               <spacer name="vsp_ctrl">
@@ -545,12 +545,12 @@ QMenu::item:selected {
  </widget>
  <customwidgets>
   <customwidget>
-   <class>_SensorCard</class>
+   <class>SensorCard</class>
    <extends>QFrame</extends>
    <header>ui.widgets</header>
   </customwidget>
   <customwidget>
-   <class>_ActuatorRow</class>
+   <class>ActuatorRow</class>
    <extends>QWidget</extends>
    <header>ui.widgets</header>
   </customwidget>

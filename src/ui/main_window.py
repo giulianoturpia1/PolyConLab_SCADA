@@ -116,9 +116,14 @@ class MainWindow(QMainWindow):
         self._ui.btn_connect.clicked.connect(self._on_btn_connect)
 
         # TCP client lifecycle
+        self._tcp.connecting.connect(self._on_tcp_connecting)
         self._tcp.connected.connect(self._on_tcp_connected)
         self._tcp.disconnected.connect(self._on_tcp_disconnected)
         self._tcp.error.connect(self._on_tcp_error)
+        self._tcp.data_received.connect(self._on_tcp_data)
+
+        # Log-window message bar
+        self._log_win.message_send.connect(self._on_log_message)
 
     # ── Slot handlers ────────────────────────────────────────────────────────
 
@@ -142,9 +147,17 @@ class MainWindow(QMainWindow):
         """Toggle the TCP connection on each button press."""
         if self._tcp.is_connected:
             self._tcp.disconnect_from()
+        elif self._tcp.is_connecting:
+            self._tcp.abort()
+            self.log("Intento de conexión cancelado.")
+            self.set_connected(False)
         else:
             self.log(f"Conectando a {self._host}:{self._port}...")
             self._tcp.connect_to(self._host, self._port)
+
+    def _on_tcp_connecting(self) -> None:
+        """Update button text while a connection attempt is in progress."""
+        self._ui.btn_connect.setText("Cancelar")
 
     def _on_tcp_connected(self) -> None:
         """Update UI state when the TCP connection is established."""
@@ -160,6 +173,21 @@ class MainWindow(QMainWindow):
         """Log the connection error and reset the UI to disconnected state."""
         self.log(f"Error de conexión: {msg}")
         self.set_connected(False)
+
+    def _on_tcp_data(self, data: bytes) -> None:
+        """Log every raw response received from the PLC."""
+        for line in data.decode(errors="replace").splitlines():
+            line = line.strip()
+            if line:
+                self.log(f"< {line}")
+
+    def _on_log_message(self, msg: str) -> None:
+        """Send a raw message (command or event) typed in the log window to the PLC."""
+        if not self._tcp.is_connected:
+            self.log("No conectado — mensaje no enviado.")
+            return
+        self.log(f"> {msg}")
+        self._tcp.send((msg + "\n").encode())
 
     # ── Public API ───────────────────────────────────────────────────────────
 

@@ -5,6 +5,9 @@ Repository that holds all the SCADA-related utilities for the PolyConLab system,
 ## Table of Contents
 
 - [1. Introduction and Prerequisites](#1-introduction-and-prerequisites)
+  - [1.1. Introduction](#11-introduction)
+  - [1.2. Prerequisites](#12-prerequisites)
+  - [1.3. Network Configuration](#13-network-configuration)
 - [2. Setting Up the Project](#2-setting-up-the-project)
 - [3. Running the Application](#3-running-the-application)
 - [4. UI Development with Qt Designer](#4-ui-development-with-qt-designer)
@@ -49,6 +52,54 @@ Before you begin, ensure you have the following installed:
 - **InstallForge** *(for distribution only)* — Download from [installforge.net](https://installforge.net/). Required only when building the final Windows installer.
 
 > **Note:** Qt Designer is bundled with PySide6 and does **not** require a separate installation. It becomes available as `pyside6-designer` after installing the Python dependencies.
+
+### 1.3. Network Configuration
+
+The SCADA communicates with the PLC over a **direct Ethernet connection** (no router or switch required). The PLC has a fixed static IP address; the PC running the SCADA must be on the same subnet for the TCP connection to succeed.
+
+#### PLC network settings
+
+| Parameter | Value |
+|---|---|
+| IP address | `192.168.1.1` |
+| Subnet mask | `255.255.255.0` |
+| Port | `80` (TCP) |
+
+#### PC Ethernet adapter settings
+
+Assign the PC's Ethernet adapter a **static** IP address that is in the same `/24` subnet as the PLC. Any address in the range `192.168.1.2` – `192.168.1.254` (other than `192.168.1.1`, which is the PLC) is valid. Example:
+
+| Parameter | Value |
+|---|---|
+| IP address | `192.168.1.100` |
+| Subnet mask | `255.255.255.0` |
+| Default gateway | *(leave blank)* |
+| DNS | *(leave blank)* |
+
+#### How to configure the adapter on Windows
+
+1. Open **Settings → Network & Internet → Ethernet → (your adapter) → Edit** (under "IP assignment").
+2. Switch the assignment from *Automatic (DHCP)* to **Manual**.
+3. Enable **IPv4** and fill in the values from the table above.
+4. Click **Save**.
+
+Alternatively, using PowerShell as **Administrator** (replace `"Ethernet"` with your adapter's actual name if different):
+
+```powershell
+netsh interface ip set address "Ethernet" static 192.168.1.100 255.255.255.0
+```
+
+> **Note:** This configuration only applies to the adapter connected to the PLC. Any other adapters (Wi-Fi, secondary Ethernet) are unaffected and can remain on DHCP.
+
+#### Verifying the Connection
+
+Once the adapter is configured, verify connectivity before launching the SCADA:
+
+```powershell
+ping 192.168.1.1
+```
+
+If the PLC is powered and the Ethernet link is up, you should receive replies. If the ping times out, double-check the cable, the adapter settings, and that the PLC firmware is running.
 
 ---
 
@@ -177,7 +228,7 @@ assets/ui/main_window.ui        ← visual layout (Qt Designer source)
         │  python build_ui.py
         ▼
 src/ui/main_window_ui.py        ← generated glue — NEVER edit by hand
-src/ui/widgets.py               ← custom widget classes (_SensorCard, _ActuatorRow, …)
+src/ui/widgets.py               ← custom widget classes (SensorCard, ActuatorRow, …)
 src/ui/main_window.py           ← application logic, signal wiring, public API
 ```
 
@@ -246,7 +297,7 @@ Your class must:
 ```python
 # src/ui/widgets.py
 
-class _MyGauge(QFrame):
+class MyGauge(QFrame):
     """Circular gauge widget for displaying a percentage value."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -254,7 +305,7 @@ class _MyGauge(QFrame):
         # build internal layout here …
 
     def configure(self, label: str) -> None:
-        """Set the gauge label (called after setupUi promotion)."""
+        """Override the default label set in __init__."""
         ...
 
     def set_value(self, percent: float) -> None:
@@ -271,7 +322,7 @@ class _MyGauge(QFrame):
    | Field | Value |
    |---|---|
    | Base class name | `QFrame` (must match what your class extends) |
-   | Promoted class name | `_MyGauge` |
+   | Promoted class name | `MyGauge` |
    | Header file | `ui.widgets` |
 
 4. Click **Add**, then **Promote**.

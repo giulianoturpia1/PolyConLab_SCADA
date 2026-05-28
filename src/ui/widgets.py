@@ -32,11 +32,15 @@ def _btn_style_off(active: bool) -> str:
     return _BTN_BASE.format(border=col.BORDER, bg=col.PANEL, fg=col.TEXT)
 
 
-class _SensorCard(QFrame):
+class SensorCard(QFrame):
     """Compact card showing a title, current value and unit."""
 
-    def __init__(self, parent: QWidget | None = None, title: str = "–", unit: str = "") -> None:
-        """Build the card layout; call configure() after construction to set real labels."""
+    def __init__(self, parent: QWidget | None = None, title: str = "SENSOR", unit: str = "") -> None:
+        """Build the card layout.
+
+        Default title and unit produce a usable placeholder in Qt Designer.
+        Call configure() after setupUi() to set the per-instance labels.
+        """
         super().__init__(parent)
         self.setStyleSheet(f"""
             QFrame {{
@@ -81,7 +85,7 @@ class _SensorCard(QFrame):
         self._val_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def configure(self, title: str, unit: str = "") -> None:
-        """Set the card title and unit label (called after setupUi promotion)."""
+        """Override the default title and unit set in __init__."""
         self._lbl_title.setText(title.upper())
         self._lbl_unit.setText(unit)
 
@@ -95,7 +99,7 @@ class _SensorCard(QFrame):
         self._val_anim.start()
 
 
-class _ActuatorRow(QWidget):
+class ActuatorRow(QWidget):
     """Row with an LED indicator, label and two buttons (on / off)."""
 
     def __init__(
@@ -105,7 +109,11 @@ class _ActuatorRow(QWidget):
         on_text: str = "ON",
         off_text: str = "OFF",
     ) -> None:
-        """Build the row layout; call configure() after construction to set real labels."""
+        """Build the row layout.
+
+        Default label and button texts produce a usable placeholder in Qt Designer.
+        Call configure() after setupUi() to set the per-instance labels.
+        """
         super().__init__(parent)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(4, 2, 4, 2)
@@ -150,7 +158,7 @@ class _ActuatorRow(QWidget):
         self._btn_off_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
     def configure(self, label: str, on_text: str = "ON", off_text: str = "OFF") -> None:
-        """Set the row label and button texts (called after setupUi promotion)."""
+        """Override the default label and button texts set in __init__."""
         self._lbl.setText(label)
         self.btn_on.setText(on_text)
         self.btn_off.setText(off_text)
