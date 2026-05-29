@@ -1,0 +1,585 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>1280</width><height>800</height></rect>
+  </property>
+  <property name="minimumSize">
+   <size><width>1280</width><height>600</height></size>
+  </property>
+  <property name="windowTitle">
+   <string>PolyConLab SCADA</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QWidget {
+    background-color: #1E2127;
+    color: #EFEFEF;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+}
+QGroupBox {
+    border: 1px solid #3D4452;
+    border-radius: 6px;
+    margin-top: 16px;
+    padding-top: 4px;
+    color: #ABB2BF;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 10px;
+    padding: 0 4px;
+}
+QPushButton {
+    background-color: #282C34;
+    color: #EFEFEF;
+    border: 1px solid #3D4452;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+QPushButton:hover {
+    background-color: #353A47;
+    border-color: #61AFEF;
+}
+QPushButton:pressed {
+    background-color: #23272E;
+}
+QPushButton:disabled {
+    color: #5C6370;
+    background-color: #23272E;
+    border-color: #2A2F3A;
+}
+QPushButton#btn_estop {
+    background-color: #E06C75;
+    color: white;
+    font-weight: bold;
+    font-size: 13px;
+}
+QPushButton#btn_estop:hover {
+    background-color: #C0505E;
+}
+QPushButton#btn_estop:disabled {
+    background-color: #5A3038;
+    color: #885060;
+}
+QPushButton#btn_on {
+    background-color: #56B870;
+    color: #1A1D22;
+    font-weight: bold;
+}
+QPushButton#btn_on:hover {
+    background-color: #45A060;
+}
+QPushButton#btn_on:disabled {
+    background-color: #2A4035;
+    color: #5C6370;
+}
+QLineEdit {
+    background-color: #282C34;
+    color: #EFEFEF;
+    border: 1px solid #3D4452;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+QLineEdit:focus {
+    border-color: #61AFEF;
+}
+QPlainTextEdit {
+    background-color: #151820;
+    color: #7E8898;
+    border: 1px solid #3D4452;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+}
+QSpinBox {
+    background-color: #282C34;
+    color: #EFEFEF;
+    border: 1px solid #3D4452;
+    border-radius: 4px;
+    padding: 3px 6px;
+}
+QSpinBox:disabled {
+    color: #5C6370;
+    border-color: #2A2F3A;
+}
+QSpinBox::up-button, QSpinBox::down-button {
+    background: #3D4452;
+    border: none;
+    width: 16px;
+}
+QSlider::groove:horizontal {
+    background: #3D4452;
+    height: 4px;
+    border-radius: 2px;
+}
+QSlider::sub-page:horizontal {
+    background: #61AFEF;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: #61AFEF;
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+}
+QSlider::sub-page:horizontal:disabled {
+    background: #3D4452;
+}
+QSlider::handle:horizontal:disabled {
+    background: #5C6370;
+}
+QMenuBar {
+    background-color: #181B22;
+    color: #EFEFEF;
+    border-bottom: 1px solid #3D4452;
+    padding: 2px 8px;
+    font-size: 13px;
+}
+QMenuBar::item:selected {
+    background-color: #282C34;
+    border-radius: 4px;
+}
+QMenu {
+    background-color: #282C34;
+    color: #EFEFEF;
+    border: 1px solid #3D4452;
+    padding: 4px 0;
+}
+QMenu::item {
+    padding: 6px 20px 6px 12px;
+}
+QMenu::item:selected {
+    background-color: #353A47;
+}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout_main">
+    <property name="spacing"><number>0</number></property>
+    <property name="leftMargin"><number>0</number></property>
+    <property name="topMargin"><number>0</number></property>
+    <property name="rightMargin"><number>0</number></property>
+    <property name="bottomMargin"><number>0</number></property>
+    <item>
+     <widget class="QWidget" name="header">
+      <property name="minimumSize"><size><width>0</width><height>52</height></size></property>
+      <property name="maximumSize"><size><width>16777215</width><height>52</height></size></property>
+      <property name="styleSheet"><string notr="true">background-color: #181B22;</string></property>
+      <layout class="QHBoxLayout" name="hbox_header">
+       <property name="leftMargin"><number>16</number></property>
+       <property name="topMargin"><number>0</number></property>
+       <property name="rightMargin"><number>16</number></property>
+       <property name="bottomMargin"><number>0</number></property>
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QLabel" name="lbl_logo">
+         <property name="minimumSize"><size><width>36</width><height>36</height></size></property>
+         <property name="maximumSize"><size><width>36</width><height>36</height></size></property>
+         <property name="text"><string/></property>
+         <property name="alignment"><set>Qt::AlignCenter</set></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lbl_title">
+         <property name="text"><string>PolyConLab SCADA</string></property>
+         <property name="styleSheet"><string notr="true">color: #EFEFEF; font-size: 16px; font-weight: bold;</string></property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="hsp_header">
+         <property name="orientation"><enum>Qt::Horizontal</enum></property>
+         <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_connect">
+         <property name="minimumSize"><size><width>100</width><height>0</height></size></property>
+         <property name="maximumSize"><size><width>100</width><height>16777215</height></size></property>
+         <property name="text"><string>Conectar</string></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lbl_conn">
+         <property name="text"><string>● Desconectado</string></property>
+         <property name="styleSheet"><string notr="true">color: #5C6370; font-size: 13px; margin-left: 8px;</string></property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QFrame" name="sep_header">
+      <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+      <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+      <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+      <property name="frameShape"><enum>QFrame::HLine</enum></property>
+      <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QWidget" name="body">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+        <horstretch>0</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
+      <layout class="QHBoxLayout" name="hbox_body">
+       <property name="leftMargin"><number>10</number></property>
+       <property name="topMargin"><number>10</number></property>
+       <property name="rightMargin"><number>10</number></property>
+       <property name="bottomMargin"><number>10</number></property>
+       <property name="spacing"><number>10</number></property>
+       <item>
+        <widget class="QWidget" name="panel_left">
+         <property name="minimumSize"><size><width>215</width><height>0</height></size></property>
+         <property name="maximumSize"><size><width>215</width><height>16777215</height></size></property>
+         <layout class="QVBoxLayout" name="vbox_left">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>10</number></property>
+          <item>
+           <widget class="QGroupBox" name="grp_state">
+            <property name="title"><string>Estado del Sistema</string></property>
+            <layout class="QVBoxLayout" name="vbox_state">
+             <item>
+              <widget class="QLabel" name="lbl_state">
+               <property name="text"><string>--</string></property>
+               <property name="alignment"><set>Qt::AlignCenter</set></property>
+               <property name="styleSheet"><string notr="true">color: #5C6370; background: #282C34; border: 2px solid #5C6370; border-radius: 6px; font-size: 18px; font-weight: bold; padding: 14px 8px;</string></property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="grp_actions">
+            <property name="title"><string>Acciones</string></property>
+            <layout class="QVBoxLayout" name="vbox_actions">
+             <property name="spacing"><number>6</number></property>
+             <item>
+              <widget class="QPushButton" name="btn_pause">
+               <property name="text"><string>Pausar</string></property>
+               <property name="enabled"><bool>false</bool></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_resume">
+               <property name="text"><string>Reanudar</string></property>
+               <property name="enabled"><bool>false</bool></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_estop">
+               <property name="text"><string>E-STOP</string></property>
+               <property name="enabled"><bool>false</bool></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_ack">
+               <property name="text"><string>Ack. Falla</string></property>
+               <property name="enabled"><bool>false</bool></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_retry">
+               <property name="text"><string>Retry Checkup</string></property>
+               <property name="enabled"><bool>false</bool></property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <spacer name="vsp_left">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="panel_center">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+           <horstretch>1</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <layout class="QVBoxLayout" name="vbox_center">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>10</number></property>
+          <item>
+           <widget class="QGroupBox" name="grp_readings">
+            <property name="title"><string>Lecturas en Tiempo Real</string></property>
+            <layout class="QHBoxLayout" name="hbox_readings">
+             <property name="spacing"><number>8</number></property>
+             <item>
+              <widget class="SensorCard" name="card_tin">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="SensorCard" name="card_tout">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="SensorCard" name="card_tcam">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="SensorCard" name="card_tmez">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="SensorCard" name="card_flow">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="SensorCard" name="card_lvl">
+               <property name="minimumSize"><size><width>100</width><height>88</height></size></property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="grp_chart">
+            <property name="title"><string>Historial de Temperatura</string></property>
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <horstretch>0</horstretch>
+              <verstretch>1</verstretch>
+             </sizepolicy>
+            </property>
+            <layout class="QVBoxLayout" name="vbox_chart">
+             <property name="leftMargin"><number>4</number></property>
+             <property name="topMargin"><number>4</number></property>
+             <property name="rightMargin"><number>4</number></property>
+             <property name="bottomMargin"><number>4</number></property>
+             <property name="spacing"><number>4</number></property>
+             <item>
+              <widget class="QWidget" name="series_toggles_container">
+               <property name="maximumSize"><size><width>16777215</width><height>36</height></size></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QChartView" name="chart_view">
+               <property name="sizePolicy">
+                <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+                 <horstretch>0</horstretch>
+                 <verstretch>1</verstretch>
+                </sizepolicy>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QWidget" name="panel_right">
+         <property name="minimumSize"><size><width>295</width><height>0</height></size></property>
+         <property name="maximumSize"><size><width>295</width><height>16777215</height></size></property>
+         <layout class="QVBoxLayout" name="vbox_right">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>0</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <item>
+           <widget class="QGroupBox" name="grp_ctrl">
+            <property name="title"><string>Control de Actuadores</string></property>
+            <layout class="QVBoxLayout" name="vbox_ctrl">
+             <property name="spacing"><number>6</number></property>
+             <item>
+              <widget class="ActuatorRow" name="row_heater"/>
+             </item>
+             <item>
+              <widget class="QWidget" name="heater_setpoint_row">
+               <layout class="QHBoxLayout" name="hbox_setpoint">
+                <property name="leftMargin"><number>26</number></property>
+                <property name="topMargin"><number>0</number></property>
+                <property name="rightMargin"><number>4</number></property>
+                <property name="bottomMargin"><number>4</number></property>
+                <property name="spacing"><number>6</number></property>
+                <item>
+                 <widget class="QLabel" name="lbl_setpoint">
+                  <property name="text"><string>Temperatura:</string></property>
+                  <property name="styleSheet"><string notr="true">color: #ABB2BF; font-size: 11px;</string></property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSlider" name="heater_slider">
+                  <property name="enabled"><bool>false</bool></property>
+                  <property name="minimum"><number>0</number></property>
+                  <property name="maximum"><number>100</number></property>
+                  <property name="value"><number>60</number></property>
+                  <property name="orientation"><enum>Qt::Horizontal</enum></property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QSpinBox" name="heater_spinbox">
+                  <property name="minimumSize"><size><width>72</width><height>0</height></size></property>
+                  <property name="maximumSize"><size><width>72</width><height>16777215</height></size></property>
+                  <property name="enabled"><bool>false</bool></property>
+                  <property name="minimum"><number>0</number></property>
+                  <property name="maximum"><number>100</number></property>
+                  <property name="value"><number>60</number></property>
+                  <property name="suffix"><string> °C</string></property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item>
+              <widget class="QFrame" name="sep_act1">
+               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+               <property name="frameShape"><enum>QFrame::HLine</enum></property>
+               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="ActuatorRow" name="row_pump"/>
+             </item>
+             <item>
+              <widget class="QFrame" name="sep_act2">
+               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+               <property name="frameShape"><enum>QFrame::HLine</enum></property>
+               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="ActuatorRow" name="row_chiller"/>
+             </item>
+             <item>
+              <widget class="QFrame" name="sep_act3">
+               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+               <property name="frameShape"><enum>QFrame::HLine</enum></property>
+               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="ActuatorRow" name="row_valve1"/>
+             </item>
+             <item>
+              <widget class="QFrame" name="sep_act4">
+               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+               <property name="frameShape"><enum>QFrame::HLine</enum></property>
+               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="ActuatorRow" name="row_valve2"/>
+             </item>
+             <item>
+              <spacer name="vsp_ctrl">
+               <property name="orientation"><enum>Qt::Vertical</enum></property>
+               <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+              </spacer>
+             </item>
+            </layout>
+           </widget>
+          </item>
+          <item>
+           <spacer name="vsp_right">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect><x>0</x><y>0</y><width>1280</width><height>22</height></rect>
+   </property>
+   <widget class="QMenu" name="menu_avanzado">
+    <property name="title"><string>Avanzado</string></property>
+    <addaction name="action_log"/>
+   </widget>
+   <widget class="QMenu" name="menu_configuracion">
+    <property name="title"><string>Configuración</string></property>
+    <addaction name="action_connection"/>
+   </widget>
+   <addaction name="menu_avanzado"/>
+   <addaction name="menu_configuracion"/>
+  </widget>
+  <action name="action_log">
+   <property name="text"><string>Logs</string></property>
+  </action>
+  <action name="action_connection">
+   <property name="text"><string>Conexión...</string></property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>SensorCard</class>
+   <extends>QFrame</extends>
+   <header>ui.widgets</header>
+  </customwidget>
+  <customwidget>
+   <class>ActuatorRow</class>
+   <extends>QWidget</extends>
+   <header>ui.widgets</header>
+  </customwidget>
+  <customwidget>
+   <class>QChartView</class>
+   <extends>QGraphicsView</extends>
+   <header>PySide6.QtCharts</header>
+  </customwidget>
+ </customwidgets>
+ <connections>
+  <connection>
+   <sender>heater_slider</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>heater_spinbox</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel"><x>-1</x><y>-1</y></hint>
+    <hint type="destinationlabel"><x>-1</x><y>-1</y></hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>heater_spinbox</sender>
+   <signal>valueChanged(int)</signal>
+   <receiver>heater_slider</receiver>
+   <slot>setValue(int)</slot>
+   <hints>
+    <hint type="sourcelabel"><x>-1</x><y>-1</y></hint>
+    <hint type="destinationlabel"><x>-1</x><y>-1</y></hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
