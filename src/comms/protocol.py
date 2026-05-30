@@ -136,6 +136,28 @@ ACTUATORS: dict[Device, ActuatorSpec] = {
     Device.VALVE2: ActuatorSpec(Cmd.valve_open(2), Cmd.valve_close(2), Resp.OPEN, Resp.CLOSED),
 }
 
+# Maps each logical sensor to the query command that reads it.
+SENSORS: dict[Sensor, str] = {
+    Sensor.TEMP_IN: Cmd.TEMP_IN,
+    Sensor.TEMP_OUT: Cmd.TEMP_OUT,
+    Sensor.TEMP_BATH: Cmd.TEMP_BATH,
+    Sensor.TEMP_MIX: Cmd.TEMP_MIX,
+    Sensor.FLOW: Cmd.FLOW,
+    Sensor.LEVEL: Cmd.LEVEL,
+}
+
+
+def parse_value(line: str) -> float | None:
+    """Parse a numeric sensor reply (e.g. "25.30", "-5.3") to float, else None.
+
+    Returns None for non-numeric replies such as "HIGH"/"LOW" or error strings,
+    so callers can distinguish a measurement from a status/fault.
+    """
+    try:
+        return float(line)
+    except ValueError:
+        return None
+
 
 def is_error(response: str) -> bool:
     """True if ``response`` is a firmware error reply (e.g. "-101,'COMMAND REJECTED'").

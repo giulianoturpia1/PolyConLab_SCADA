@@ -5,19 +5,22 @@ from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QMainWindow
 
 from comms.plc_client import PlcClient
-from comms.protocol import Device, Evt
+from comms.protocol import Device, Evt, Sensor, parse_value
 from ui import palette as col
 from ui.anim import Fade
 from ui.log_window import LogWindow
 from ui.main_window_ui import Ui_MainWindow
 from ui.settings_dialog import SettingsDialog
 from ui.temperature_chart import TemperatureChart
-from ui.widgets import ActuatorRow
+from ui.widgets import ActuatorRow, SensorCard
 from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
 _DEFAULT_HOST = "192.168.1.1"
 _DEFAULT_PORT = 80
+
+# The four temperatures the chart plots, in the order push_temps() expects.
+_CHART_SENSORS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP_MIX)
 
 
 class MainWindow(QMainWindow):
@@ -74,6 +77,19 @@ class MainWindow(QMainWindow):
         }
         self._act_rows = list(self._rows.values())
 
+        # Logical sensor → its display card. Protocol knowledge stays in comms.
+        self._cards: dict[Sensor, SensorCard] = {
+            Sensor.TEMP_IN: self._ui.card_tin,
+            Sensor.TEMP_OUT: self._ui.card_tout,
+            Sensor.TEMP_BATH: self._ui.card_tcam,
+            Sensor.TEMP_MIX: self._ui.card_tmez,
+            Sensor.FLOW: self._ui.card_flow,
+            Sensor.LEVEL: self._ui.card_lvl,
+        }
+        # Latest temperature readings, accumulated into a full set before the
+        # chart is fed (push_temps wants all four at once).
+        self._temp_batch: dict[Sensor, float] = {}
+
         # Fades in the state label on every state change.
         self._state_fade = Fade(self._ui.lbl_state, duration=400)
 
@@ -119,6 +135,8 @@ class MainWindow(QMainWindow):
         self._plc.line_received.connect(lambda line: self.log(f"< {line}"))
         self._plc.actuator_changed.connect(self._on_actuator_changed)
         self._plc.actuator_rejected.connect(self._on_actuator_rejected)
+        self._plc.sensor_updated.connect(self._on_sensor_updated)
+        self._plc.sensor_fault.connect(self._on_sensor_fault)
 
         # Log-window message bar
         self._log_win.message_send.connect(self._on_log_message)
@@ -191,6 +209,21 @@ class MainWindow(QMainWindow):
         """Log that the PLC refused an actuator command; the row is left unchanged."""
         self.log(f"  PLC rechazó el comando — {self._rows[dev].label()} sin cambios.")
 
+    def _on_sensor_updated(self, sensor: Sensor, value: str) -> None:
+        """Show a fresh sensor reading on its card and feed the temperature chart."""
+        self._cards[sensor].set_value(value)
+        temp = parse_value(value)
+        if temp is not None and sensor in _CHART_SENSORS:
+            self._temp_batch[sensor] = temp
+            if all(s in self._temp_batch for s in _CHART_SENSORS):
+                self.push_temps(*(self._temp_batch[s] for s in _CHART_SENSORS))
+                self._temp_batch.clear()
+
+    def _on_sensor_fault(self, sensor: Sensor) -> None:
+        """Mark a sensor card as faulted; drop any partial temperature batch."""
+        self._cards[sensor].set_value("ERR", col.RED)
+        self._temp_batch.pop(sensor, None)
+
     def _on_log_message(self, msg: str) -> None:
         """Send a raw message (command or event) typed in the log window to the PLC."""
         if not self._plc.send_raw(msg):
@@ -214,6 +247,7 @@ class MainWindow(QMainWindow):
             self._ui.lbl_conn.setStyleSheet(f"color:{col.GRAY};font-size:13px;margin-left:8px;")
             self._ui.btn_connect.setText("Conectar")
             self.set_state("--")
+            self._temp_batch.clear()
 
         for btn in self._action_btns:
             btn.setEnabled(connected)

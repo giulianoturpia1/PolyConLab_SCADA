@@ -48,7 +48,7 @@ class TemperatureChart:
         chart.setBackgroundBrush(QColor(col.PANEL))
         chart.setPlotAreaBackgroundBrush(QColor(col.BG))
         chart.setPlotAreaBackgroundVisible(True)
-        chart.legend().setLabelColor(QColor(col.TEXT))
+        chart.legend().hide()  # redundant with the custom series-toggle buttons below
         chart.setTitle("")
 
         for name, color in _SERIES_CFG:
