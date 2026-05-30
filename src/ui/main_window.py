@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QDateTime, QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWidgets import QGraphicsOpacityEffect, QMainWindow
+from PySide6.QtWidgets import QMainWindow
 
-from network.tcp_client import TcpClient
+from comms.plc_client import PlcClient
+from comms.protocol import Device, Evt
 from ui import palette as col
+from ui.anim import Fade
 from ui.log_window import LogWindow
 from ui.main_window_ui import Ui_MainWindow
 from ui.settings_dialog import SettingsDialog
 from ui.temperature_chart import TemperatureChart
+from ui.widgets import ActuatorRow
 from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
@@ -29,7 +32,7 @@ class MainWindow(QMainWindow):
 
         self._chart = TemperatureChart(self._ui.chart_view, self._ui.series_toggles_container)
         self._log_win = LogWindow(self)
-        self._tcp = TcpClient(self)
+        self._plc = PlcClient(self)
 
         self._configure_widgets()
         self._connect_signals()
@@ -60,32 +63,22 @@ class MainWindow(QMainWindow):
             self._ui.btn_ack,
             self._ui.btn_retry,
         ]
-        self._act_rows = [
-            self._ui.row_heater,
-            self._ui.row_pump,
-            self._ui.row_chiller,
-            self._ui.row_valve1,
-            self._ui.row_valve2,
-        ]
+        # The only actuator mapping the view keeps: logical device → its row widget.
+        # All protocol knowledge lives in comms.protocol / PlcClient.
+        self._rows: dict[Device, ActuatorRow] = {
+            Device.HEATER: self._ui.row_heater,
+            Device.PUMP: self._ui.row_pump,
+            Device.CHILLER: self._ui.row_chiller,
+            Device.VALVE1: self._ui.row_valve1,
+            Device.VALVE2: self._ui.row_valve2,
+        }
+        self._act_rows = list(self._rows.values())
 
-        # Opacity animation for the state label: fades in on every state change.
-        self._state_effect = QGraphicsOpacityEffect(self._ui.lbl_state)
-        self._state_effect.setOpacity(1.0)
-        self._ui.lbl_state.setGraphicsEffect(self._state_effect)
-        self._state_anim = QPropertyAnimation(self._state_effect, b"opacity", self)
-        self._state_anim.setDuration(400)
-        self._state_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        # Fades in the state label on every state change.
+        self._state_fade = Fade(self._ui.lbl_state, duration=400)
 
-        # Opacity animations for action buttons: fade in when the connection is established.
-        self._action_btn_anims: list[tuple[QGraphicsOpacityEffect, QPropertyAnimation]] = []
-        for btn in self._action_btns:
-            effect = QGraphicsOpacityEffect(btn)
-            effect.setOpacity(1.0)
-            btn.setGraphicsEffect(effect)
-            anim = QPropertyAnimation(effect, b"opacity", self)
-            anim.setDuration(500)
-            anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-            self._action_btn_anims.append((effect, anim))
+        # Fades action buttons in when the connection is established.
+        self._action_fades = [Fade(btn, duration=500) for btn in self._action_btns]
 
     def _load_logo(self) -> None:
         """Load logo.png into the header label and window icon.
@@ -115,15 +108,31 @@ class MainWindow(QMainWindow):
         # Header connect button
         self._ui.btn_connect.clicked.connect(self._on_btn_connect)
 
-        # TCP client lifecycle
-        self._tcp.connecting.connect(self._on_tcp_connecting)
-        self._tcp.connected.connect(self._on_tcp_connected)
-        self._tcp.disconnected.connect(self._on_tcp_disconnected)
-        self._tcp.error.connect(self._on_tcp_error)
-        self._tcp.data_received.connect(self._on_tcp_data)
+        # PLC client lifecycle
+        self._plc.connecting.connect(self._on_tcp_connecting)
+        self._plc.connected.connect(self._on_tcp_connected)
+        self._plc.disconnected.connect(self._on_tcp_disconnected)
+        self._plc.error.connect(self._on_tcp_error)
+
+        # PLC client traffic + domain events
+        self._plc.command_sent.connect(lambda line: self.log(f"> {line}"))
+        self._plc.line_received.connect(lambda line: self.log(f"< {line}"))
+        self._plc.actuator_changed.connect(self._on_actuator_changed)
+        self._plc.actuator_rejected.connect(self._on_actuator_rejected)
 
         # Log-window message bar
         self._log_win.message_send.connect(self._on_log_message)
+
+        # Action buttons → state-machine events
+        self._ui.btn_pause.clicked.connect(lambda: self._plc.send_event(Evt.PAUSE))
+        self._ui.btn_resume.clicked.connect(lambda: self._plc.send_event(Evt.UNPAUSE))
+        self._ui.btn_estop.clicked.connect(lambda: self._plc.send_event(Evt.STOP))
+        self._ui.btn_ack.clicked.connect(lambda: self._plc.send_event(Evt.ACK_FAULT))
+        self._ui.btn_retry.clicked.connect(lambda: self._plc.send_event(Evt.RETRY_CHECKUP))
+
+        # Actuator rows → device commands; the row updates only on PLC confirmation.
+        for dev, row in self._rows.items():
+            row.activated.connect(lambda on, d=dev: self._plc.set_actuator(d, on))
 
     # ── Slot handlers ────────────────────────────────────────────────────────
 
@@ -145,15 +154,15 @@ class MainWindow(QMainWindow):
 
     def _on_btn_connect(self) -> None:
         """Toggle the TCP connection on each button press."""
-        if self._tcp.is_connected:
-            self._tcp.disconnect_from()
-        elif self._tcp.is_connecting:
-            self._tcp.abort()
+        if self._plc.is_connected:
+            self._plc.disconnect_from()
+        elif self._plc.is_connecting:
+            self._plc.abort()
             self.log("Intento de conexión cancelado.")
             self.set_connected(False)
         else:
             self.log(f"Conectando a {self._host}:{self._port}...")
-            self._tcp.connect_to(self._host, self._port)
+            self._plc.connect_to(self._host, self._port)
 
     def _on_tcp_connecting(self) -> None:
         """Update button text while a connection attempt is in progress."""
@@ -174,20 +183,18 @@ class MainWindow(QMainWindow):
         self.log(f"Error de conexión: {msg}")
         self.set_connected(False)
 
-    def _on_tcp_data(self, data: bytes) -> None:
-        """Log every raw response received from the PLC."""
-        for line in data.decode(errors="replace").splitlines():
-            line = line.strip()
-            if line:
-                self.log(f"< {line}")
+    def _on_actuator_changed(self, dev: Device, on: bool) -> None:
+        """Paint an actuator row once the PLC confirms its new state."""
+        self._rows[dev].set_active(on)
+
+    def _on_actuator_rejected(self, dev: Device) -> None:
+        """Log that the PLC refused an actuator command; the row is left unchanged."""
+        self.log(f"  PLC rechazó el comando — {self._rows[dev].label()} sin cambios.")
 
     def _on_log_message(self, msg: str) -> None:
         """Send a raw message (command or event) typed in the log window to the PLC."""
-        if not self._tcp.is_connected:
+        if not self._plc.send_raw(msg):
             self.log("No conectado — mensaje no enviado.")
-            return
-        self.log(f"> {msg}")
-        self._tcp.send((msg + "\n").encode())
 
     # ── Public API ───────────────────────────────────────────────────────────
 
@@ -212,14 +219,11 @@ class MainWindow(QMainWindow):
             btn.setEnabled(connected)
 
         # Fade action buttons in when connecting, snap back to full opacity when disconnecting.
-        for effect, anim in self._action_btn_anims:
-            anim.stop()
+        for fade in self._action_fades:
             if connected:
-                anim.setStartValue(0.0)
-                anim.setEndValue(1.0)
-                anim.start()
+                fade.play(0.0, 1.0)
             else:
-                effect.setOpacity(1.0)
+                fade.set_opacity(1.0)
         for row in self._act_rows:
             row.set_enabled_buttons(connected)
         self._ui.heater_slider.setEnabled(connected)
@@ -233,10 +237,7 @@ class MainWindow(QMainWindow):
             f"color:{color};background:{col.PANEL};border:2px solid {color};"
             f"border-radius:6px;font-size:18px;font-weight:bold;padding:14px 8px;"
         )
-        self._state_anim.stop()
-        self._state_anim.setStartValue(0.2)
-        self._state_anim.setEndValue(1.0)
-        self._state_anim.start()
+        self._state_fade.play(0.2, 1.0)
 
     def push_temps(self, tin: float, tout: float, tcam: float, tmez: float) -> None:
         """Forward a new temperature sample to the chart for all four sensors."""

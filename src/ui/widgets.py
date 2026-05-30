@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -13,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui import palette as col
+from ui.anim import Fade
 
 # Button style helpers -------------------------------------------------------
 _BTN_BASE = "border-radius:4px;font-size:12px;padding:4px 0;border:1px solid {border};background:{bg};color:{fg};"
@@ -76,13 +76,8 @@ class SensorCard(QFrame):
         lay.addWidget(self._val)
         lay.addWidget(self._lbl_unit)
 
-        # Opacity animation: fades the value label in whenever set_value() is called.
-        self._val_effect = QGraphicsOpacityEffect(self._val)
-        self._val_effect.setOpacity(1.0)
-        self._val.setGraphicsEffect(self._val_effect)
-        self._val_anim = QPropertyAnimation(self._val_effect, b"opacity", self)
-        self._val_anim.setDuration(450)
-        self._val_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        # Fades the value label in whenever set_value() is called.
+        self._val_fade = Fade(self._val, duration=450)
 
     def configure(self, title: str, unit: str = "") -> None:
         """Override the default title and unit set in __init__."""
@@ -93,14 +88,18 @@ class SensorCard(QFrame):
         """Update the displayed value and play a fade-in to signal the change to the operator."""
         self._val.setText(v)
         self._val.setStyleSheet(f"background:transparent;border:none;color:{color};font-size:22px;font-weight:bold;")
-        self._val_anim.stop()
-        self._val_anim.setStartValue(0.15)
-        self._val_anim.setEndValue(1.0)
-        self._val_anim.start()
+        self._val_fade.play(0.15, 1.0)
 
 
 class ActuatorRow(QWidget):
-    """Row with an LED indicator, label and two buttons (on / off)."""
+    """Row with an LED indicator, label and two buttons (on / off).
+
+    Emits ``activated(bool)`` when the user clicks a button (True for on/open,
+    False for off/close). The row does not change its own appearance on click;
+    the owner sends the command and calls :meth:`set_active` to reflect state.
+    """
+
+    activated = Signal(bool)
 
     def __init__(
         self,
@@ -138,30 +137,24 @@ class ActuatorRow(QWidget):
         lay.addWidget(self.btn_on)
         lay.addWidget(self.btn_off)
 
-        # Wire clicks to the local state machine.
-        self.btn_on.clicked.connect(lambda: self.set_active(True))
-        self.btn_off.clicked.connect(lambda: self.set_active(False))
+        # Emit user intent; the owner decides what command to send and when to
+        # update the visual state (see set_active).
+        self.btn_on.clicked.connect(lambda: self.activated.emit(True))
+        self.btn_off.clicked.connect(lambda: self.activated.emit(False))
 
-        # Opacity animations: flash whichever button confirms the new state.
-        self._btn_on_effect = QGraphicsOpacityEffect(self.btn_on)
-        self._btn_on_effect.setOpacity(1.0)
-        self.btn_on.setGraphicsEffect(self._btn_on_effect)
-        self._btn_on_anim = QPropertyAnimation(self._btn_on_effect, b"opacity", self)
-        self._btn_on_anim.setDuration(400)
-        self._btn_on_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        self._btn_off_effect = QGraphicsOpacityEffect(self.btn_off)
-        self._btn_off_effect.setOpacity(1.0)
-        self.btn_off.setGraphicsEffect(self._btn_off_effect)
-        self._btn_off_anim = QPropertyAnimation(self._btn_off_effect, b"opacity", self)
-        self._btn_off_anim.setDuration(400)
-        self._btn_off_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        # Flash whichever button confirms the new state.
+        self._btn_on_fade = Fade(self.btn_on, duration=400)
+        self._btn_off_fade = Fade(self.btn_off, duration=400)
 
     def configure(self, label: str, on_text: str = "ON", off_text: str = "OFF") -> None:
         """Override the default label and button texts set in __init__."""
         self._lbl.setText(label)
         self.btn_on.setText(on_text)
         self.btn_off.setText(off_text)
+
+    def label(self) -> str:
+        """Return the row's display label."""
+        return self._lbl.text()
 
     def set_active(self, active: bool) -> None:
         """Transition the row to ON or OFF state.
@@ -175,17 +168,11 @@ class ActuatorRow(QWidget):
 
         # Fade in the button that confirmed the state change; keep the other opaque.
         if active:
-            self._btn_off_effect.setOpacity(1.0)
-            self._btn_on_anim.stop()
-            self._btn_on_anim.setStartValue(0.1)
-            self._btn_on_anim.setEndValue(1.0)
-            self._btn_on_anim.start()
+            self._btn_off_fade.set_opacity(1.0)
+            self._btn_on_fade.play(0.1, 1.0)
         else:
-            self._btn_on_effect.setOpacity(1.0)
-            self._btn_off_anim.stop()
-            self._btn_off_anim.setStartValue(0.1)
-            self._btn_off_anim.setEndValue(1.0)
-            self._btn_off_anim.start()
+            self._btn_on_fade.set_opacity(1.0)
+            self._btn_off_fade.play(0.1, 1.0)
 
     def set_enabled_buttons(self, enabled: bool) -> None:
         """Enable or disable both action buttons together."""
