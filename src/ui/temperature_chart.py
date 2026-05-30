@@ -68,7 +68,7 @@ class TemperatureChart:
 
         self._ax_y = QValueAxis()
         self._ax_y.setRange(0, 100)
-        self._ax_y.setLabelFormat("%.0f°")
+        self._ax_y.setLabelFormat("%.0f ")
         self._ax_y.setLabelsColor(QColor(col.TEXT))
         self._ax_y.setGridLineColor(QColor(col.BORDER))
         self._ax_y.setTitleText("°C")
