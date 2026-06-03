@@ -59,6 +59,10 @@ class PlcClient(QObject):
         self._pending: deque[_Pending] = deque()
         self._polls_outstanding = 0
 
+        # Sensors currently included in each poll round.  Starts empty; each
+        # sensor is added only when the user clicks its card to enable polling.
+        self._enabled_sensors: set[Sensor] = set()
+
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(_POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_sensors)
@@ -117,6 +121,13 @@ class PlcClient(QObject):
         """Send an arbitrary line (e.g. from the log terminal). Returns False if not connected."""
         return self._send_line(text)
 
+    def set_sensor_enabled(self, sensor: Sensor, enabled: bool) -> None:
+        """Include or exclude a sensor from the periodic poll round."""
+        if enabled:
+            self._enabled_sensors.add(sensor)
+        else:
+            self._enabled_sensors.discard(sensor)
+
     # ── Internals: sending ─────────────────────────────────────────────────────
 
     def _send_line(self, line: str, quiet: bool = False) -> bool:
@@ -129,10 +140,12 @@ class PlcClient(QObject):
         return True
 
     def _poll_sensors(self) -> None:
-        """Query every sensor once. Skips a round while the previous one is still draining."""
+        """Query each enabled sensor once. Skips a round while the previous one is still draining."""
         if self._polls_outstanding > 0:
             return
         for sensor, query in SENSORS.items():
+            if sensor not in self._enabled_sensors:
+                continue
             if self._send_line(query, quiet=True):
                 self._pending.append(_Pending(partial(self._resolve_sensor, sensor), quiet=True))
                 self._polls_outstanding += 1
@@ -206,3 +219,4 @@ class PlcClient(QObject):
         self._pending.clear()
         self._rx_buffer = b""
         self._polls_outstanding = 0
+        self._enabled_sensors = set()

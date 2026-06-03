@@ -1,17 +1,16 @@
 """
 Real-time temperature chart.
 
-Wraps the QChart, its four series, the axes and the series-visibility
-toggle buttons.  Instantiated by passing the QChartView and the toggles
-container widget from the generated .ui.
+Wraps the QChart, its four series and both axes.
+Series visibility is driven externally via :meth:`set_series_visible` — each
+temperature SensorCard click in MainWindow enables or disables its series.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
 
 from ui import palette as col
 
@@ -24,21 +23,20 @@ _SERIES_CFG = [
 ]
 
 
-class TemperatureChart:
+class TemperatureChart(QObject):
     """Manages the temperature line chart with a rolling time window."""
 
     WINDOW = 60  # number of data points visible at once
 
-    def __init__(self, chart_view: QChartView, toggles_container: QWidget) -> None:
-        """Build the chart and toggle buttons, then attach them to the provided widgets."""
+    def __init__(self, chart_view: QChartView) -> None:
+        """Build the chart and attach it to the view."""
+        super().__init__()
         self._t = 0
         self._series: list[QLineSeries] = []
 
         chart = self._build_chart()
         chart_view.setChart(chart)
         chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        self._build_toggles(toggles_container)
 
     # ── Internal setup ───────────────────────────────────────────────────────
 
@@ -55,6 +53,7 @@ class TemperatureChart:
             s = QLineSeries()
             s.setName(name)
             s.setColor(QColor(color))
+            s.setVisible(False)  # hidden until the user enables polling
             chart.addSeries(s)
             self._series.append(s)
 
@@ -82,48 +81,40 @@ class TemperatureChart:
 
         return chart
 
-    def _build_toggles(self, container: QWidget) -> None:
-        """Populate the container widget with one checkable toggle button per series."""
-        lay = QHBoxLayout(container)
-        lay.setContentsMargins(4, 2, 4, 2)
-        lay.setSpacing(6)
-        lay.addStretch()
-
-        for (label, color), series in zip(_SERIES_CFG, self._series):
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setChecked(True)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: {col.PANEL};
-                    border: 2px solid {color};
-                    border-radius: 4px;
-                    color: {color};
-                    padding: 3px 10px;
-                    font-size: 11px;
-                    font-weight: bold;
-                }}
-                QPushButton:!checked {{
-                    border-color: {col.BORDER};
-                    color: {col.GRAY};
-                    font-weight: normal;
-                }}
-            """)
-            btn.toggled.connect(series.setVisible)
-            lay.addWidget(btn)
-
-        lay.addStretch()
-
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def push(self, tin: float, tout: float, tcam: float, tmez: float) -> None:
-        """Append one data point to each series; slides the time window when the limit is reached."""
+    def set_series_visible(self, idx: int, visible: bool) -> None:
+        """Show or hide the series at ``idx`` (0=Entrada, 1=Salida, 2=Cámara, 3=Mezcla)."""
+        self._series[idx].setVisible(visible)
+
+    def reset_visibility(self) -> None:
+        """Hide all series — called on PLC disconnect so the chart starts clean on reconnect."""
+        for s in self._series:
+            s.setVisible(False)
+
+    def push(
+        self,
+        tin: float | None,
+        tout: float | None,
+        tcam: float | None,
+        tmez: float | None,
+    ) -> None:
+        """Append one data point per enabled series; slides the time window when the limit is reached.
+
+        A ``None`` value means that sensor is currently disabled — its series is
+        left untouched so no phantom data is stored while polling is off.
+        Only series that received a new point participate in the window-slide
+        removal, keeping every series' point count internally consistent.
+        """
         t = self._t
+        updated: list[QLineSeries] = []
         for s, v in zip(self._series, (tin, tout, tcam, tmez)):
-            s.append(t, v)
+            if v is not None:
+                s.append(t, v)
+                updated.append(s)
         self._t += 1
 
         if t >= self.WINDOW:
             self._ax_x.setRange(t - self.WINDOW + 1, t)
-            for s in self._series:
+            for s in updated:
                 s.removePoints(0, 1)

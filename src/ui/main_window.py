@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self._host = _DEFAULT_HOST
         self._port = _DEFAULT_PORT
 
-        self._chart = TemperatureChart(self._ui.chart_view, self._ui.series_toggles_container)
+        self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
         self._plc = PlcClient(self)
 
@@ -86,8 +86,12 @@ class MainWindow(QMainWindow):
             Sensor.FLOW: self._ui.card_flow,
             Sensor.LEVEL: self._ui.card_lvl,
         }
-        # Latest temperature readings, accumulated into a full set before the
-        # chart is fed (push_temps wants all four at once).
+        # Subset of _CHART_SENSORS that is currently being polled (user-selected).
+        # Starts empty; updated whenever the user toggles a chart button.
+        self._enabled_chart_sensors: set[Sensor] = set()
+
+        # Latest temperature readings, accumulated until every *enabled* chart
+        # sensor has reported before the chart is updated.
         self._temp_batch: dict[Sensor, float] = {}
 
         # Fades in the state label on every state change.
@@ -138,6 +142,10 @@ class MainWindow(QMainWindow):
         self._plc.sensor_updated.connect(self._on_sensor_updated)
         self._plc.sensor_fault.connect(self._on_sensor_fault)
 
+        # Sensor cards → enable/disable per-sensor polling (and chart series for temp sensors).
+        for sensor, card in self._cards.items():
+            card.toggled.connect(lambda enabled, s=sensor: self._on_card_toggled(s, enabled))
+
         # Log-window message bar
         self._log_win.message_send.connect(self._on_log_message)
 
@@ -173,6 +181,10 @@ class MainWindow(QMainWindow):
     def _on_btn_connect(self) -> None:
         """Toggle the TCP connection on each button press."""
         if self._plc.is_connected:
+            # Request a safe state before closing.  Qt flushes the write buffer
+            # before sending the TCP FIN, so the FW receives PAUSE even though
+            # disconnect_from() is called immediately after.
+            self._plc.send_event(Evt.PAUSE)
             self._plc.disconnect_from()
         elif self._plc.is_connecting:
             self._plc.abort()
@@ -209,14 +221,34 @@ class MainWindow(QMainWindow):
         """Log that the PLC refused an actuator command; the row is left unchanged."""
         self.log(f"  PLC rechazó el comando — {self._rows[dev].label()} sin cambios.")
 
+    def _on_card_toggled(self, sensor: Sensor, enabled: bool) -> None:
+        """Enable or disable polling when the user clicks a sensor card.
+
+        For temperature sensors, also shows or hides the corresponding chart
+        series so the chart always matches what is being polled.
+        """
+        self._plc.set_sensor_enabled(sensor, enabled)
+
+        if sensor in _CHART_SENSORS:
+            idx = _CHART_SENSORS.index(sensor)
+            self._chart.set_series_visible(idx, enabled)
+            if enabled:
+                self._enabled_chart_sensors.add(sensor)
+            else:
+                self._enabled_chart_sensors.discard(sensor)
+                # Drop any stale reading so the next batch does not mix old and new data.
+                self._temp_batch.pop(sensor, None)
+
     def _on_sensor_updated(self, sensor: Sensor, value: str) -> None:
         """Show a fresh sensor reading on its card and feed the temperature chart."""
         self._cards[sensor].set_value(value)
         temp = parse_value(value)
-        if temp is not None and sensor in _CHART_SENSORS:
+        if temp is not None and sensor in self._enabled_chart_sensors:
             self._temp_batch[sensor] = temp
-            if all(s in self._temp_batch for s in _CHART_SENSORS):
-                self.push_temps(*(self._temp_batch[s] for s in _CHART_SENSORS))
+            # Push only when every currently-enabled chart sensor has reported.
+            if all(s in self._temp_batch for s in self._enabled_chart_sensors):
+                # Disabled sensors are passed as None so the chart skips their series.
+                self.push_temps(*(self._temp_batch.get(s) for s in _CHART_SENSORS))
                 self._temp_batch.clear()
 
     def _on_sensor_fault(self, sensor: Sensor) -> None:
@@ -247,7 +279,17 @@ class MainWindow(QMainWindow):
             self._ui.lbl_conn.setStyleSheet(f"color:{col.GRAY};font-size:13px;margin-left:8px;")
             self._ui.btn_connect.setText("Conectar")
             self.set_state("--")
+            # Reset all sensor cards, chart series and any in-flight batch so
+            # the next connection starts from a clean slate.
+            self._enabled_chart_sensors.clear()
             self._temp_batch.clear()
+            self._chart.reset_visibility()
+            for card in self._cards.values():
+                card.set_value("--")
+
+        # Enable or disable card interaction together with the rest of the UI.
+        for card in self._cards.values():
+            card.set_interactive(connected)
 
         for btn in self._action_btns:
             btn.setEnabled(connected)
@@ -273,6 +315,12 @@ class MainWindow(QMainWindow):
         )
         self._state_fade.play(0.2, 1.0)
 
-    def push_temps(self, tin: float, tout: float, tcam: float, tmez: float) -> None:
-        """Forward a new temperature sample to the chart for all four sensors."""
+    def push_temps(
+        self,
+        tin: float | None,
+        tout: float | None,
+        tcam: float | None,
+        tmez: float | None,
+    ) -> None:
+        """Forward a new temperature sample to the chart; ``None`` means that sensor is disabled."""
         self._chart.push(tin, tout, tcam, tmez)
