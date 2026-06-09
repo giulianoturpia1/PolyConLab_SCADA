@@ -27,6 +27,8 @@ class TemperatureChart(QObject):
     """Manages the temperature line chart with a rolling time window."""
 
     WINDOW = 60  # number of data points visible at once
+    _TEMP_MIN_C = 0  # default Y-axis lower bound (°C)
+    _TEMP_MAX_C = 100  # default Y-axis upper bound (°C)
 
     def __init__(self, chart_view: QChartView) -> None:
         """Build the chart and attach it to the view."""
@@ -66,7 +68,7 @@ class TemperatureChart(QObject):
         self._ax_x.setTitleBrush(QColor(col.TEXT))
 
         self._ax_y = QValueAxis()
-        self._ax_y.setRange(0, 100)
+        self._ax_y.setRange(self._TEMP_MIN_C, self._TEMP_MAX_C)
         self._ax_y.setLabelFormat("%.0f ")
         self._ax_y.setLabelsColor(QColor(col.TEXT))
         self._ax_y.setGridLineColor(QColor(col.BORDER))

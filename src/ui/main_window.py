@@ -4,28 +4,33 @@ from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QMainWindow
 
+from comms.init_sequence import InitSequence
 from comms.plc_client import PlcClient
-from comms.protocol import Device, Evt, Sensor, parse_value
+from comms.protocol import Device, Evt, Sensor
 from ui import palette as col
+from ui.actuator_row import ActuatorRow
 from ui.anim import Fade
 from ui.log_window import LogWindow
 from ui.main_window_ui import Ui_MainWindow
+from ui.sensor_card import SensorCard
+from ui.sensor_panel import SensorPanel
 from ui.settings_dialog import SettingsDialog
 from ui.temperature_chart import TemperatureChart
-from ui.widgets import ActuatorRow, SensorCard
 from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
 _DEFAULT_HOST = "192.168.1.1"
 _DEFAULT_PORT = 80
 
-# The four temperatures the chart plots, in the order push_temps() expects.
-_CHART_SENSORS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP_MIX)
+# ── UI timing / sizing constants ──────────────────────────────────────────────
+_LOGO_SIZE_PX = 36  # logo scaled to a square of this many pixels
+_STATE_FADE_MS = 400  # fade duration for the FSM state label
+_ACTION_FADE_MS = 500  # fade duration for the action button group
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
-        """Initialise UI, chart, log window and TCP client; wire all signals."""
+        """Initialise UI, chart, log window, PLC client and sensor panel; wire all signals."""
         super().__init__()
         self._ui = Ui_MainWindow()
         self._ui.setupUi(self)
@@ -36,8 +41,18 @@ class MainWindow(QMainWindow):
         self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
         self._plc = PlcClient(self)
+        self._init_seq = InitSequence(self._plc, self)
+
+        # Last known FSM state name — kept in sync by the init sequence and the
+        # periodic STATE? poll.  Used by _apply_state_gating().
+        self._current_state: str = "--"
 
         self._configure_widgets()
+
+        # SensorPanel is created after _configure_widgets so the card dict and
+        # chart are fully set up before signals are wired inside the panel.
+        self._sensor_panel = SensorPanel(self._cards, self._chart, self._plc, self)
+
         self._connect_signals()
         self._load_logo()
         self.log("Interfaz Lista. Conectese al PLC para Comenzar.")
@@ -45,7 +60,7 @@ class MainWindow(QMainWindow):
     # ── Post-setupUi configuration ───────────────────────────────────────────
 
     def _configure_widgets(self) -> None:
-        """Set labels on promoted widgets and build reference lists for bulk enable/disable."""
+        """Set labels on promoted widgets and build reference dicts."""
         self._ui.card_tin.configure("T. Entrada", "°C")
         self._ui.card_tout.configure("T. Salida", "°C")
         self._ui.card_tcam.configure("T. Cámara", "°C")
@@ -66,8 +81,8 @@ class MainWindow(QMainWindow):
             self._ui.btn_ack,
             self._ui.btn_retry,
         ]
-        # The only actuator mapping the view keeps: logical device → its row widget.
-        # All protocol knowledge lives in comms.protocol / PlcClient.
+
+        # Logical device → its row widget.
         self._rows: dict[Device, ActuatorRow] = {
             Device.HEATER: self._ui.row_heater,
             Device.PUMP: self._ui.row_pump,
@@ -77,7 +92,7 @@ class MainWindow(QMainWindow):
         }
         self._act_rows = list(self._rows.values())
 
-        # Logical sensor → its display card. Protocol knowledge stays in comms.
+        # Logical sensor → its display card.  Passed to SensorPanel after this method.
         self._cards: dict[Sensor, SensorCard] = {
             Sensor.TEMP_IN: self._ui.card_tin,
             Sensor.TEMP_OUT: self._ui.card_tout,
@@ -86,19 +101,12 @@ class MainWindow(QMainWindow):
             Sensor.FLOW: self._ui.card_flow,
             Sensor.LEVEL: self._ui.card_lvl,
         }
-        # Subset of _CHART_SENSORS that is currently being polled (user-selected).
-        # Starts empty; updated whenever the user toggles a chart button.
-        self._enabled_chart_sensors: set[Sensor] = set()
-
-        # Latest temperature readings, accumulated until every *enabled* chart
-        # sensor has reported before the chart is updated.
-        self._temp_batch: dict[Sensor, float] = {}
 
         # Fades in the state label on every state change.
-        self._state_fade = Fade(self._ui.lbl_state, duration=400)
+        self._state_fade = Fade(self._ui.lbl_state, duration=_STATE_FADE_MS)
 
         # Fades action buttons in when the connection is established.
-        self._action_fades = [Fade(btn, duration=500) for btn in self._action_btns]
+        self._action_fades = [Fade(btn, duration=_ACTION_FADE_MS) for btn in self._action_btns]
 
     def _load_logo(self) -> None:
         """Load logo.png into the header label and window icon.
@@ -111,8 +119,8 @@ class MainWindow(QMainWindow):
             return
 
         pixmap = QPixmap(str(_LOGO_PATH)).scaled(
-            36,
-            36,
+            _LOGO_SIZE_PX,
+            _LOGO_SIZE_PX,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -121,46 +129,44 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         """Connect all Qt signals to their slot methods."""
-        # Menu actions
+        # ── Menu ──────────────────────────────────────────────────────────────
         self._ui.action_log.triggered.connect(self._toggle_log)
         self._ui.action_connection.triggered.connect(self._open_settings)
 
-        # Header connect button
+        # ── Connection lifecycle ───────────────────────────────────────────────
         self._ui.btn_connect.clicked.connect(self._on_btn_connect)
-
-        # PLC client lifecycle
         self._plc.connecting.connect(self._on_tcp_connecting)
         self._plc.connected.connect(self._on_tcp_connected)
         self._plc.disconnected.connect(self._on_tcp_disconnected)
         self._plc.error.connect(self._on_tcp_error)
 
-        # PLC client traffic + domain events
+        # ── PLC traffic (log window) ───────────────────────────────────────────
         self._plc.command_sent.connect(lambda line: self.log(f"> {line}"))
         self._plc.line_received.connect(lambda line: self.log(f"< {line}"))
-        self._plc.actuator_changed.connect(self._on_actuator_changed)
-        self._plc.actuator_rejected.connect(self._on_actuator_rejected)
-        self._plc.sensor_updated.connect(self._on_sensor_updated)
-        self._plc.sensor_fault.connect(self._on_sensor_fault)
-
-        # Sensor cards → enable/disable per-sensor polling (and chart series for temp sensors).
-        for sensor, card in self._cards.items():
-            card.toggled.connect(lambda enabled, s=sensor: self._on_card_toggled(s, enabled))
-
-        # Log-window message bar
         self._log_win.message_send.connect(self._on_log_message)
 
-        # Action buttons → state-machine events
-        self._ui.btn_pause.clicked.connect(lambda: self._plc.send_event(Evt.PAUSE))
-        self._ui.btn_resume.clicked.connect(lambda: self._plc.send_event(Evt.UNPAUSE))
-        self._ui.btn_estop.clicked.connect(lambda: self._plc.send_event(Evt.STOP))
-        self._ui.btn_ack.clicked.connect(lambda: self._plc.send_event(Evt.ACK_FAULT))
-        self._ui.btn_retry.clicked.connect(lambda: self._plc.send_event(Evt.RETRY_CHECKUP))
-
-        # Actuator rows → device commands; the row updates only on PLC confirmation.
+        # ── Actuators ─────────────────────────────────────────────────────────
+        self._plc.actuator_changed.connect(self._on_actuator_changed)
+        self._plc.actuator_rejected.connect(self._on_actuator_rejected)
         for dev, row in self._rows.items():
             row.activated.connect(lambda on, d=dev: self._plc.set_actuator(d, on))
 
-    # ── Slot handlers ────────────────────────────────────────────────────────
+        # ── Init sequence ─────────────────────────────────────────────────────
+        self._init_seq.progress.connect(self.log)
+        self._init_seq.sensor_result.connect(self._on_init_sensor_result)
+        self._init_seq.finished.connect(self._on_init_finished)
+
+        # ── State polling ─────────────────────────────────────────────────────
+        self._plc.state_received.connect(self._on_state_polled)
+
+        # ── Action buttons ────────────────────────────────────────────────────
+        self._ui.btn_pause.clicked.connect(lambda: self._plc.send_event(Evt.PAUSE))
+        self._ui.btn_resume.clicked.connect(lambda: self._plc.send_event(Evt.UNPAUSE))
+        self._ui.btn_estop.clicked.connect(self._on_stop_clicked)
+        self._ui.btn_ack.clicked.connect(self._on_ack_clicked)
+        self._ui.btn_retry.clicked.connect(self._on_retry_clicked)
+
+    # ── Connection lifecycle slots ────────────────────────────────────────────
 
     def _toggle_log(self) -> None:
         """Show the log window, or bring it to front if already open."""
@@ -195,71 +201,148 @@ class MainWindow(QMainWindow):
             self._plc.connect_to(self._host, self._port)
 
     def _on_tcp_connecting(self) -> None:
-        """Update button text while a connection attempt is in progress."""
         self._ui.btn_connect.setText("Cancelar")
 
     def _on_tcp_connected(self) -> None:
-        """Update UI state when the TCP connection is established."""
-        self.set_connected(True, f"{self._host}:{self._port}")
+        """Update connection indicator and start the initialization handshake.
+
+        Sensor card interactivity is NOT enabled here — it is gated by
+        _apply_state_gating and only unlocked when the PLC confirms MANUAL.
+        """
+        self._ui.lbl_conn.setText(f"● Conectado  {self._host}:{self._port}")
+        self._ui.lbl_conn.setStyleSheet(f"color:{col.GREEN};font-size:13px;margin-left:8px;")
+        self._ui.btn_connect.setText("Desconectar")
+        for fade in self._action_fades:
+            fade.play(0.0, 1.0)
         self.log(f"Conectado a {self._host}:{self._port}.")
+        self._init_seq.start()
 
     def _on_tcp_disconnected(self) -> None:
-        """Update UI state when the TCP connection is lost or closed."""
+        self._init_seq.abort()
         self.set_connected(False)
         self.log("Desconectado del PLC.")
 
     def _on_tcp_error(self, msg: str) -> None:
-        """Log the connection error and reset the UI to disconnected state."""
+        self._init_seq.abort()
         self.log(f"Error de conexión: {msg}")
         self.set_connected(False)
+
+    # ── Actuator slots ────────────────────────────────────────────────────────
 
     def _on_actuator_changed(self, dev: Device, on: bool) -> None:
         """Paint an actuator row once the PLC confirms its new state."""
         self._rows[dev].set_active(on)
 
     def _on_actuator_rejected(self, dev: Device) -> None:
-        """Log that the PLC refused an actuator command; the row is left unchanged."""
+        """Log that the PLC refused a command; the row is left unchanged."""
         self.log(f"  PLC rechazó el comando — {self._rows[dev].label()} sin cambios.")
 
-    def _on_card_toggled(self, sensor: Sensor, enabled: bool) -> None:
-        """Enable or disable polling when the user clicks a sensor card.
+    # ── Init sequence slots ───────────────────────────────────────────────────
 
-        For temperature sensors, also shows or hides the corresponding chart
-        series so the chart always matches what is being polled.
+    def _on_init_sensor_result(self, sensor: Sensor, ok: bool) -> None:
+        """Delegate fault marking to the panel and log the sensor name."""
+        self._sensor_panel.mark_init_fault(sensor, ok)
+        if not ok:
+            self.log(f"  Sensor con fallo: {self._sensor_panel.card_title(sensor)}")
+
+    def _on_init_finished(self, success: bool, msg: str) -> None:
+        """React to the end of the initialization handshake."""
+        if success:
+            self.log(f"Inicialización completa: {msg}")
+        else:
+            self.log(f"Error de inicialización: {msg}")
+            # Query state once so the label and buttons reflect the current
+            # PLC state (typically SOFT ERROR after a sensor fault).
+            self._plc.query_state()
+
+        # Always start the periodic STATE? poll — even after a failed init —
+        # so the SCADA tracks state changes during fault recovery.
+        self._plc.start_state_polling()
+
+    # ── State polling slot ────────────────────────────────────────────────────
+
+    def _on_state_polled(self, state: str) -> None:
+        """Handle a STATE? reply from either the init sequence or the periodic poll.
+
+        If the PLC is in CHECKUP and no handshake is in progress, start one
+        automatically.  This handles: ACK FAULT that returned to CHECKUP (because
+        previous state was CHECKUP), or any unexpected CHECKUP re-entry.
         """
-        self._plc.set_sensor_enabled(sensor, enabled)
+        self.set_state(state)
+        if state == "CHECKUP" and not self._init_seq.is_running:
+            self._init_seq.restart()
 
-        if sensor in _CHART_SENSORS:
-            idx = _CHART_SENSORS.index(sensor)
-            self._chart.set_series_visible(idx, enabled)
-            if enabled:
-                self._enabled_chart_sensors.add(sensor)
-            else:
-                self._enabled_chart_sensors.discard(sensor)
-                # Drop any stale reading so the next batch does not mix old and new data.
-                self._temp_batch.pop(sensor, None)
+    # ── Recovery action slots ─────────────────────────────────────────────────
 
-    def _on_sensor_updated(self, sensor: Sensor, value: str) -> None:
-        """Show a fresh sensor reading on its card and feed the temperature chart."""
-        self._cards[sensor].set_value(value)
-        temp = parse_value(value)
-        if temp is not None and sensor in self._enabled_chart_sensors:
-            self._temp_batch[sensor] = temp
-            # Push only when every currently-enabled chart sensor has reported.
-            if all(s in self._temp_batch for s in self._enabled_chart_sensors):
-                # Disabled sensors are passed as None so the chart skips their series.
-                self.push_temps(*(self._temp_batch.get(s) for s in _CHART_SENSORS))
-                self._temp_batch.clear()
+    def _on_stop_clicked(self) -> None:
+        """Send a graceful shutdown and disconnect.
 
-    def _on_sensor_fault(self, sensor: Sensor) -> None:
-        """Mark a sensor card as faulted; drop any partial temperature batch."""
-        self._cards[sensor].set_value("ERR", col.RED)
-        self._temp_batch.pop(sensor, None)
+        ``EVT:SHUTDOWN`` (kShutdown) is the correct event for an operator-initiated
+        stop: the FW turns off all actuators and closes valves via ShutdownState, then
+        returns to STARTUP automatically.
+
+        ``EVT:STOP`` (kEStop) is intentionally not used here — kEStop is only handled
+        in SoftErrorState (pushes to HardError); ManualState and PauseState silently
+        ignore it, making it a no-op from the states where this button is active.
+
+        After sending SHUTDOWN the SCADA disconnects so the operator gets a clean
+        slate and must reconnect explicitly to start a new session.
+        """
+        self._plc.send_event(Evt.SHUTDOWN)
+        self._plc.disconnect_from()
+
+    def _on_ack_clicked(self) -> None:
+        """Accept the fault and reach MANUAL without re-probing sensors.
+
+        The init sequence's :meth:`~comms.init_sequence.InitSequence.force_proceed`
+        exits SOFT ERROR if necessary and sends EVT:SCADA OK + EVT:SENSORS OK
+        directly — bypassing the sensor probe — so the PLC reaches MANUAL even
+        if some sensors are permanently offline.
+        """
+        self._sensor_panel.clear_faults()
+        self._init_seq.force_proceed()
+
+    def _on_retry_clicked(self) -> None:
+        """Request a full sensor re-probe and re-run the init handshake."""
+        self._plc.send_event(Evt.RETRY_CHECKUP)
+        self._sensor_panel.clear_faults()
+        self._init_seq.restart()
+
+    # ── Misc slots ────────────────────────────────────────────────────────────
 
     def _on_log_message(self, msg: str) -> None:
-        """Send a raw message (command or event) typed in the log window to the PLC."""
+        """Send a raw message typed in the log window to the PLC."""
         if not self._plc.send_raw(msg):
             self.log("No conectado — mensaje no enviado.")
+
+    def _apply_state_gating(self, state: str) -> None:
+        """Enable or disable controls based on the current PLC FSM state.
+
+        Single authoritative place that maps FSM state names to button enable
+        states.  Called from :meth:`set_state` on every state change.
+        """
+        connected = self._plc.is_connected
+        is_manual = state == "MANUAL"
+        is_pause = state == "PAUSE"
+        is_soft_error = state == "SOFT ERROR"
+
+        # Sensor cards are only interactive in MANUAL — the only state where the
+        # FW accepts MEAS read commands.  In all other states (PAUSE, SOFT ERROR,
+        # etc.) the FW replies COMMAND REJECTED, which would show ERR on the cards.
+        self._sensor_panel.set_polling_allowed(connected and is_manual)
+
+        # Actuators are only accepted by the PLC in MANUAL.
+        actuator_on = connected and is_manual
+        for row in self._act_rows:
+            row.set_enabled_buttons(actuator_on)
+        self._ui.heater_slider.setEnabled(actuator_on)
+        self._ui.heater_spinbox.setEnabled(actuator_on)
+
+        self._ui.btn_pause.setEnabled(connected and is_manual)
+        self._ui.btn_resume.setEnabled(connected and is_pause)
+        self._ui.btn_estop.setEnabled(connected and (is_manual or is_pause))
+        self._ui.btn_ack.setEnabled(connected and is_soft_error)
+        self._ui.btn_retry.setEnabled(connected and is_soft_error)
 
     # ── Public API ───────────────────────────────────────────────────────────
 
@@ -269,44 +352,26 @@ class MainWindow(QMainWindow):
         self._log_win.append(f"[{ts}]  {msg}")
 
     def set_connected(self, connected: bool, host: str = "") -> None:
-        """Update the connection indicator, button text and actuator enable state."""
-        if connected:
-            self._ui.lbl_conn.setText(f"● Conectado  {host}")
-            self._ui.lbl_conn.setStyleSheet(f"color:{col.GREEN};font-size:13px;margin-left:8px;")
-            self._ui.btn_connect.setText("Desconectar")
-        else:
+        """Update the connection indicator and reset the UI on disconnect.
+
+        Button enable states are managed entirely by :meth:`_apply_state_gating`
+        (called from :meth:`set_state`) once the PLC state is known — they are
+        never bulk-enabled here, preventing accidental actuator commands before
+        the PLC is in MANUAL.
+        """
+        if not connected:
             self._ui.lbl_conn.setText("● Desconectado")
             self._ui.lbl_conn.setStyleSheet(f"color:{col.GRAY};font-size:13px;margin-left:8px;")
             self._ui.btn_connect.setText("Conectar")
             self.set_state("--")
-            # Reset all sensor cards, chart series and any in-flight batch so
-            # the next connection starts from a clean slate.
-            self._enabled_chart_sensors.clear()
-            self._temp_batch.clear()
-            self._chart.reset_visibility()
-            for card in self._cards.values():
-                card.set_value("--")
-
-        # Enable or disable card interaction together with the rest of the UI.
-        for card in self._cards.values():
-            card.set_interactive(connected)
-
-        for btn in self._action_btns:
-            btn.setEnabled(connected)
-
-        # Fade action buttons in when connecting, snap back to full opacity when disconnecting.
-        for fade in self._action_fades:
-            if connected:
-                fade.play(0.0, 1.0)
-            else:
+            self._sensor_panel.reset()
+            self._sensor_panel.set_interactive(False)
+            for fade in self._action_fades:
                 fade.set_opacity(1.0)
-        for row in self._act_rows:
-            row.set_enabled_buttons(connected)
-        self._ui.heater_slider.setEnabled(connected)
-        self._ui.heater_spinbox.setEnabled(connected)
 
     def set_state(self, state: str) -> None:
-        """Update the state label text and border colour, then fade it in."""
+        """Update the state label, apply button gating and fade the label in."""
+        self._current_state = state
         color = col.STATE_COLOR.get(state, col.GRAY)
         self._ui.lbl_state.setText(state)
         self._ui.lbl_state.setStyleSheet(
@@ -314,13 +379,4 @@ class MainWindow(QMainWindow):
             f"border-radius:6px;font-size:18px;font-weight:bold;padding:14px 8px;"
         )
         self._state_fade.play(0.2, 1.0)
-
-    def push_temps(
-        self,
-        tin: float | None,
-        tout: float | None,
-        tcam: float | None,
-        tmez: float | None,
-    ) -> None:
-        """Forward a new temperature sample to the chart; ``None`` means that sensor is disabled."""
-        self._chart.push(tin, tout, tcam, tmez)
+        self._apply_state_gating(state)

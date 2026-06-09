@@ -280,20 +280,27 @@ QMenu::item:selected {
              </item>
              <item>
               <widget class="QPushButton" name="btn_estop">
-               <property name="text"><string>STOP</string></property>
+               <property name="text"><string>Detener</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Detiene el sistema de forma segura: apaga actuadores, cierra válvulas y desconecta.
+Reconecte para iniciar una nueva sesión.</string></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_ack">
-               <property name="text"><string>Falla</string></property>
+               <property name="text"><string>Aceptar Falla</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Reconoce la falla y confirma que la condición fue resuelta.
+Si el sistema estaba en MANUAL antes de la falla, vuelve directamente a MANUAL.
+Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_retry">
                <property name="text"><string>Reintentar Chequeo</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Solicita al PLC repetir el CHEQUEO completo y re-verifica todos los sensores.
+Úselo si un sensor no respondió durante el inicio.</string></property>
               </widget>
              </item>
             </layout>

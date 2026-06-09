@@ -15,10 +15,11 @@ from functools import partial
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from comms.protocol import ACTUATORS, SENSORS, Device, Resp, Sensor, is_error, parse_value
+from comms.protocol import ACTUATORS, SENSORS, Cmd, Device, Resp, Sensor, is_error, parse_value
 from network.tcp_client import TcpClient
 
-_POLL_INTERVAL_MS = 1000
+_POLL_INTERVAL_MS = 1_000  # sensor read cadence
+_STATE_POLL_INTERVAL_MS = 2_000  # FSM state label refresh cadence
 
 
 @dataclass
@@ -51,6 +52,9 @@ class PlcClient(QObject):
     sensor_updated = Signal(object, str)  # (Sensor, value) — fresh reading as a display string
     sensor_fault = Signal(object)  # (Sensor) — sensor reply was an error
 
+    # Diagnostic / init events.
+    state_received = Signal(str)  # reply to a STATE? query — carries the raw state name string
+
     def __init__(self, parent: QObject | None = None) -> None:
         """Create the transport, timer, and wire signals into protocol handling."""
         super().__init__(parent)
@@ -66,6 +70,12 @@ class PlcClient(QObject):
         self._poll_timer = QTimer(self)
         self._poll_timer.setInterval(_POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_sensors)
+
+        # Periodic STATE? poll — started by the owner (MainWindow) after the init
+        # sequence completes; stopped automatically on disconnect.
+        self._state_poll_timer = QTimer(self)
+        self._state_poll_timer.setInterval(_STATE_POLL_INTERVAL_MS)
+        self._state_poll_timer.timeout.connect(self.query_state)
 
         self._tcp.connecting.connect(self.connecting)
         self._tcp.connected.connect(self._on_connected)
@@ -128,6 +138,62 @@ class PlcClient(QObject):
         else:
             self._enabled_sensors.discard(sensor)
 
+    def query_state(self) -> bool:
+        """Send a STATE? query; the reply surfaces as :attr:`state_received`.
+
+        Returns False if not connected.  Multiple back-to-back calls are safe:
+        each one appends a resolver to the FIFO queue, so replies are matched
+        in order.
+        """
+        if not self._send_line(Cmd.STATE, quiet=True):
+            return False
+        self._pending.append(_Pending(self._resolve_state, quiet=True))
+        return True
+
+    def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
+        """Query every sensor once and report pass/fail per sensor via *on_done*.
+
+        Sends one MEAS query per sensor through the normal FIFO correlator.
+        *on_done* is called with a ``{Sensor: bool}`` dict once all issued
+        queries have been answered (True = valid reading, False = error/fault).
+        Returns False if not connected or no queries could be issued.
+        """
+        if not self._tcp.is_connected:
+            return False
+
+        results: dict[Sensor, bool] = {}
+        # Use a one-element list so the inner closure can observe the final count.
+        pending_count: list[int] = [0]
+
+        def check_done() -> None:
+            if len(results) >= pending_count[0] > 0:
+                on_done(dict(results))
+
+        for sensor, query in SENSORS.items():
+            if not self._send_line(query, quiet=True):
+                continue  # skip sensors whose query could not be sent
+
+            def make_resolver(s: Sensor) -> Callable[[str], bool]:
+                def resolve(line: str) -> bool:
+                    results[s] = not is_error(line) and (parse_value(line) is not None or line in (Resp.HIGH, Resp.LOW))
+                    check_done()
+                    return True
+
+                return resolve
+
+            self._pending.append(_Pending(make_resolver(sensor), quiet=True))
+            pending_count[0] += 1
+
+        return pending_count[0] > 0
+
+    def start_state_polling(self) -> None:
+        """Start the periodic STATE? poll (interval = ``_STATE_POLL_INTERVAL_MS``)."""
+        self._state_poll_timer.start()
+
+    def stop_state_polling(self) -> None:
+        """Stop the periodic STATE? poll."""
+        self._state_poll_timer.stop()
+
     # ── Internals: sending ─────────────────────────────────────────────────────
 
     def _send_line(self, line: str, quiet: bool = False) -> bool:
@@ -177,6 +243,11 @@ class PlcClient(QObject):
                 return
         self.line_received.emit(line)
 
+    def _resolve_state(self, line: str) -> bool:
+        """Accept the next response line as the FSM state name and emit it."""
+        self.state_received.emit(line)
+        return True
+
     def _resolve_actuator(self, dev: Device, on: bool, expected: str, line: str) -> bool:
         """Confirm on the expected reply, reject on an error, ignore anything else."""
         if line == expected:
@@ -216,6 +287,7 @@ class PlcClient(QObject):
     def _reset_session(self) -> None:
         """Stop polling and drop in-flight state from the previous session."""
         self._poll_timer.stop()
+        self._state_poll_timer.stop()
         self._pending.clear()
         self._rx_buffer = b""
         self._polls_outstanding = 0

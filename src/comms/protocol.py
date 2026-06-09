@@ -69,6 +69,7 @@ class Cmd:
     LOG_ON = "SYST:LOG ON"
     LOG_OFF = "SYST:LOG OFF"
     LOG_STATE = "SYST:LOG?"
+    FAULT_QUERY = "SYST:FAULT?"  # Query which devices failed hardware initialisation
 
     # Valves are parameterized by number, appended after a comma
     # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve numbers 1 and 2 only.
@@ -89,15 +90,42 @@ class Cmd:
 
 
 class Evt:
-    """State-machine events (``EVT:`` prefix)."""
+    """State-machine events (``EVT:`` prefix).
 
+    Initialization handshake (sent *by* the SCADA to drive the startup sequence):
+
+    * :attr:`INIT_OK` — advance PLC from STARTUP to CHECKUP.
+    * :attr:`SCADA_OK` — SCADA side is ready (sent while PLC is in CHECKUP).
+    * :attr:`SENSORS_OK` — all sensor probes passed (sent while PLC is in CHECKUP).
+    * :attr:`FAULT_RECOVERABLE` — at least one sensor probe failed; PLC goes to SOFT ERROR.
+    """
+
+    # Initialisation handshake
+    INIT_OK = "EVT:INIT OK"
+    SCADA_OK = "EVT:SCADA OK"
+    SENSORS_OK = "EVT:SENSORS OK"
+    FAULT_RECOVERABLE = "EVT:FAULT RECOVERABLE"
+
+    # Runtime control
     PAUSE = "EVT:PAUSE"
     UNPAUSE = "EVT:UNPAUSE"
-    STOP = "EVT:STOP"
     ACK_FAULT = "EVT:ACK FAULT"
+    CONDITION_CLEARED = "EVT:CONDITION CLEARED"  # paired with ACK_FAULT to exit SOFT ERROR
     RETRY_CHECKUP = "EVT:RETRY CHECKUP"
+
+    # Stop / shutdown
     SHUTDOWN = "EVT:SHUTDOWN"
+    # SHUTDOWN: graceful ordered stop — works from MANUAL, PAUSE, CHECKUP, STARTUP.
+    #   FW runs SafeState (actuators off, valves closed), then auto-returns to STARTUP.
+    #   Use for the operator "stop the experiment" action; no fault flag is set.
+
     RESET_FAULT = "EVT:RESET FAULT"
+
+    # ── Diagnostic-only events (not used by normal SCADA UI buttons) ──────────
+    # STOP maps to kEStop in the FW. kEStop is only handled in SoftErrorState
+    # (→ HardError). ManualState and PauseState ignore it. Do NOT wire this to
+    # a UI button enabled in MANUAL or PAUSE — it will be silently discarded.
+    ESTOP_DIAGNOSTIC = "EVT:STOP"
 
 
 class Resp:
