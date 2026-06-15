@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ui import palette as col
+from ui.style import palette as col
 
 
 class SettingsDialog(QDialog):

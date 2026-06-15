@@ -6,26 +6,35 @@ from PySide6.QtWidgets import QMainWindow
 
 from comms.init_sequence import InitSequence
 from comms.plc_client import PlcClient
-from comms.protocol import Device, Evt, Sensor
-from ui import palette as col
-from ui.actuator_row import ActuatorRow
-from ui.anim import Fade
-from ui.log_window import LogWindow
+from comms.protocol import Evt
+from models import Device, Sensor
 from ui.main_window_ui import Ui_MainWindow
-from ui.sensor_card import SensorCard
+from ui.scada_state import ScadaState, STATE_CONTROLS, from_plc
 from ui.sensor_panel import SensorPanel
-from ui.settings_dialog import SettingsDialog
-from ui.temperature_chart import TemperatureChart
+from ui.style import palette as col
+from ui.style.anim import ACTION_BTN_FADE_MS, Fade, STATE_LABEL_FADE_MS
+from ui.widgets.actuator_row import ActuatorRow
+from ui.widgets.sensor_card import SensorCard
+from ui.widgets.temperature_chart import TemperatureChart
+from ui.windows.log_window import LogWindow
+from ui.windows.settings_dialog import SettingsDialog
 from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
 _DEFAULT_HOST = "192.168.1.1"
 _DEFAULT_PORT = 80
 
-# ── UI timing / sizing constants ──────────────────────────────────────────────
-_LOGO_SIZE_PX = 36  # logo scaled to a square of this many pixels
-_STATE_FADE_MS = 400  # fade duration for the FSM state label
-_ACTION_FADE_MS = 500  # fade duration for the action button group
+# ── UI sizing constants ───────────────────────────────────────────────────────
+_LOGO_SIZE_PX = 36          # logo scaled to a square of this many pixels
+
+# ── Connection label stylesheet values ───────────────────────────────────────
+_CONN_FONT_PX = 13
+_CONN_MARGIN_LEFT_PX = 8
+
+# ── State label stylesheet values ─────────────────────────────────────────────
+_STATE_FONT_PX = 18
+_STATE_BORDER_RADIUS_PX = 6
+_STATE_PADDING = "14px 8px"
 
 
 class MainWindow(QMainWindow):
@@ -43,9 +52,7 @@ class MainWindow(QMainWindow):
         self._plc = PlcClient(self)
         self._init_seq = InitSequence(self._plc, self)
 
-        # Last known FSM state name — kept in sync by the init sequence and the
-        # periodic STATE? poll.  Used by _apply_state_gating().
-        self._current_state: str = "--"
+        self._scada_state = ScadaState.DISCONNECTED
 
         self._configure_widgets()
 
@@ -103,10 +110,10 @@ class MainWindow(QMainWindow):
         }
 
         # Fades in the state label on every state change.
-        self._state_fade = Fade(self._ui.lbl_state, duration=_STATE_FADE_MS)
+        self._state_fade = Fade(self._ui.lbl_state, duration=STATE_LABEL_FADE_MS)
 
         # Fades action buttons in when the connection is established.
-        self._action_fades = [Fade(btn, duration=_ACTION_FADE_MS) for btn in self._action_btns]
+        self._action_fades = [Fade(btn, duration=ACTION_BTN_FADE_MS) for btn in self._action_btns]
 
     def _load_logo(self) -> None:
         """Load logo.png into the header label and window icon.
@@ -195,12 +202,13 @@ class MainWindow(QMainWindow):
         elif self._plc.is_connecting:
             self._plc.abort()
             self.log("Intento de conexión cancelado.")
-            self.set_connected(False)
+            self._reset_to_disconnected()
         else:
             self.log(f"Conectando a {self._host}:{self._port}...")
             self._plc.connect_to(self._host, self._port)
 
     def _on_tcp_connecting(self) -> None:
+        self._transition(ScadaState.CONNECTING)
         self._ui.btn_connect.setText("Cancelar")
 
     def _on_tcp_connected(self) -> None:
@@ -210,22 +218,25 @@ class MainWindow(QMainWindow):
         _apply_state_gating and only unlocked when the PLC confirms MANUAL.
         """
         self._ui.lbl_conn.setText(f"● Conectado  {self._host}:{self._port}")
-        self._ui.lbl_conn.setStyleSheet(f"color:{col.GREEN};font-size:13px;margin-left:8px;")
+        self._ui.lbl_conn.setStyleSheet(
+            f"color:{col.GREEN};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
+        )
         self._ui.btn_connect.setText("Desconectar")
         for fade in self._action_fades:
             fade.play(0.0, 1.0)
         self.log(f"Conectado a {self._host}:{self._port}.")
+        self._transition(ScadaState.INITIALIZING)
         self._init_seq.start()
 
     def _on_tcp_disconnected(self) -> None:
         self._init_seq.abort()
-        self.set_connected(False)
+        self._reset_to_disconnected()
         self.log("Desconectado del PLC.")
 
     def _on_tcp_error(self, msg: str) -> None:
         self._init_seq.abort()
+        self._reset_to_disconnected()
         self.log(f"Error de conexión: {msg}")
-        self.set_connected(False)
 
     # ── Actuator slots ────────────────────────────────────────────────────────
 
@@ -261,15 +272,17 @@ class MainWindow(QMainWindow):
 
     # ── State polling slot ────────────────────────────────────────────────────
 
-    def _on_state_polled(self, state: str) -> None:
+    def _on_state_polled(self, raw: str) -> None:
         """Handle a STATE? reply from either the init sequence or the periodic poll.
 
         If the PLC is in CHECKUP and no handshake is in progress, start one
         automatically.  This handles: ACK FAULT that returned to CHECKUP (because
         previous state was CHECKUP), or any unexpected CHECKUP re-entry.
         """
-        self.set_state(state)
-        if state == "CHECKUP" and not self._init_seq.is_running:
+        self._update_state_label(raw)
+        plc_state = from_plc(raw)
+        self._transition(plc_state)
+        if plc_state == ScadaState.CHECKUP and not self._init_seq.is_running:
             self._init_seq.restart()
 
     # ── Recovery action slots ─────────────────────────────────────────────────
@@ -315,34 +328,51 @@ class MainWindow(QMainWindow):
         if not self._plc.send_raw(msg):
             self.log("No conectado — mensaje no enviado.")
 
-    def _apply_state_gating(self, state: str) -> None:
-        """Enable or disable controls based on the current PLC FSM state.
+    # ── State machine ─────────────────────────────────────────────────────────
 
-        Single authoritative place that maps FSM state names to button enable
-        states.  Called from :meth:`set_state` on every state change.
-        """
-        connected = self._plc.is_connected
-        is_manual = state == "MANUAL"
-        is_pause = state == "PAUSE"
-        is_soft_error = state == "SOFT ERROR"
+    def _transition(self, new_state: ScadaState) -> None:
+        """Move to a new SCADA state and apply the corresponding control permissions."""
+        self._scada_state = new_state
+        self._apply_state_gating()
 
-        # Sensor cards are only interactive in MANUAL — the only state where the
-        # FW accepts MEAS read commands.  In all other states (PAUSE, SOFT ERROR,
-        # etc.) the FW replies COMMAND REJECTED, which would show ERR on the cards.
-        self._sensor_panel.set_polling_allowed(connected and is_manual)
-
-        # Actuators are only accepted by the PLC in MANUAL.
-        actuator_on = connected and is_manual
+    def _apply_state_gating(self) -> None:
+        """Enable or disable controls by looking up the current state in STATE_CONTROLS."""
+        c = STATE_CONTROLS[self._scada_state]
+        self._sensor_panel.set_polling_allowed(c.sensors)
         for row in self._act_rows:
-            row.set_enabled_buttons(actuator_on)
-        self._ui.heater_slider.setEnabled(actuator_on)
-        self._ui.heater_spinbox.setEnabled(actuator_on)
+            row.set_enabled_buttons(c.actuators)
+        self._ui.heater_slider.setEnabled(c.actuators)
+        self._ui.heater_spinbox.setEnabled(c.actuators)
+        self._ui.btn_pause.setEnabled(c.pause)
+        self._ui.btn_resume.setEnabled(c.resume)
+        self._ui.btn_estop.setEnabled(c.stop)
+        self._ui.btn_ack.setEnabled(c.ack)
+        self._ui.btn_retry.setEnabled(c.retry)
 
-        self._ui.btn_pause.setEnabled(connected and is_manual)
-        self._ui.btn_resume.setEnabled(connected and is_pause)
-        self._ui.btn_estop.setEnabled(connected and (is_manual or is_pause))
-        self._ui.btn_ack.setEnabled(connected and is_soft_error)
-        self._ui.btn_retry.setEnabled(connected and is_soft_error)
+    def _update_state_label(self, raw: str) -> None:
+        """Repaint the FSM state label and fade it in."""
+        color = col.STATE_COLOR.get(raw, col.GRAY)
+        self._ui.lbl_state.setText(raw)
+        self._ui.lbl_state.setStyleSheet(
+            f"color:{color};background:{col.PANEL};border:2px solid {color};"
+            f"border-radius:{_STATE_BORDER_RADIUS_PX}px;font-size:{_STATE_FONT_PX}px;"
+            f"font-weight:bold;padding:{_STATE_PADDING};"
+        )
+        self._state_fade.play(0.2, 1.0)
+
+    def _reset_to_disconnected(self) -> None:
+        """Reset all connection-dependent UI to the disconnected baseline."""
+        self._update_state_label("--")
+        self._transition(ScadaState.DISCONNECTED)
+        self._sensor_panel.reset()
+        self._sensor_panel.set_interactive(False)
+        self._ui.lbl_conn.setText("● Desconectado")
+        self._ui.lbl_conn.setStyleSheet(
+            f"color:{col.GRAY};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
+        )
+        self._ui.btn_connect.setText("Conectar")
+        for fade in self._action_fades:
+            fade.set_opacity(1.0)
 
     # ── Public API ───────────────────────────────────────────────────────────
 
@@ -350,33 +380,3 @@ class MainWindow(QMainWindow):
         """Append a timestamped message to the log window."""
         ts = QDateTime.currentDateTime().toString("hh:mm:ss")
         self._log_win.append(f"[{ts}]  {msg}")
-
-    def set_connected(self, connected: bool, host: str = "") -> None:
-        """Update the connection indicator and reset the UI on disconnect.
-
-        Button enable states are managed entirely by :meth:`_apply_state_gating`
-        (called from :meth:`set_state`) once the PLC state is known — they are
-        never bulk-enabled here, preventing accidental actuator commands before
-        the PLC is in MANUAL.
-        """
-        if not connected:
-            self._ui.lbl_conn.setText("● Desconectado")
-            self._ui.lbl_conn.setStyleSheet(f"color:{col.GRAY};font-size:13px;margin-left:8px;")
-            self._ui.btn_connect.setText("Conectar")
-            self.set_state("--")
-            self._sensor_panel.reset()
-            self._sensor_panel.set_interactive(False)
-            for fade in self._action_fades:
-                fade.set_opacity(1.0)
-
-    def set_state(self, state: str) -> None:
-        """Update the state label, apply button gating and fade the label in."""
-        self._current_state = state
-        color = col.STATE_COLOR.get(state, col.GRAY)
-        self._ui.lbl_state.setText(state)
-        self._ui.lbl_state.setStyleSheet(
-            f"color:{color};background:{col.PANEL};border:2px solid {color};"
-            f"border-radius:6px;font-size:18px;font-weight:bold;padding:14px 8px;"
-        )
-        self._state_fade.play(0.2, 1.0)
-        self._apply_state_gating(state)

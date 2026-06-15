@@ -10,6 +10,10 @@ from __future__ import annotations
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 
+# ── Named fade durations used across the main window ─────────────────────────
+STATE_LABEL_FADE_MS = 400   # FSM state label fade on each state change
+ACTION_BTN_FADE_MS = 500    # action button group fade-in on connect
+
 
 class Fade:
     """Opacity fade-in controller bound to a single widget."""

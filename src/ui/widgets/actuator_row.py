@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui import palette as col
-from ui.anim import Fade
+from ui.style import palette as col
+from ui.style.anim import Fade
 
 # ── Sizing / timing constants ─────────────────────────────────────────────────
 _BTN_WIDTH_PX = 72  # fixed width for ON / OFF buttons

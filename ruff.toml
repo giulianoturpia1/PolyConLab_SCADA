@@ -1,8 +1,0 @@
-line-length = 120
-target-version = "py312"
-
-[lint]
-select = ["E", "F", "W", "I"]
-
-[lint.isort]
-known-first-party = ["comms", "models", "ui", "utils"]

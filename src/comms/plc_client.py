@@ -15,7 +15,8 @@ from functools import partial
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from comms.protocol import ACTUATORS, SENSORS, Cmd, Device, Resp, Sensor, is_error, parse_value
+from comms.protocol import ACTUATORS, SENSORS, Cmd, Resp, is_error, parse_value
+from models import Device, Sensor
 from network.tcp_client import TcpClient
 
 _POLL_INTERVAL_MS = 1_000  # sensor read cadence

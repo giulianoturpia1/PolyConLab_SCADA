@@ -12,7 +12,7 @@ from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
 
-from ui import palette as col
+from ui.style import palette as col
 
 # (name, color) — fixed order: tin, tout, tcam, tmez
 _SERIES_CFG = [

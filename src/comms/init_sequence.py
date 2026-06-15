@@ -21,7 +21,8 @@ from collections.abc import Callable
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from comms.plc_client import PlcClient
-from comms.protocol import Evt, Sensor
+from comms.protocol import Evt
+from models import Sensor
 
 # ── Timing constants ─────────────────────────────────────────────────────────
 

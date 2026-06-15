@@ -16,10 +16,11 @@ from __future__ import annotations
 from PySide6.QtCore import QObject
 
 from comms.plc_client import PlcClient
-from comms.protocol import Sensor, parse_value
-from ui import palette as col
-from ui.sensor_card import SensorCard
-from ui.temperature_chart import TemperatureChart
+from comms.protocol import parse_value
+from models import Sensor
+from ui.style import palette as col
+from ui.widgets.sensor_card import SensorCard
+from ui.widgets.temperature_chart import TemperatureChart
 
 # Temperature sensors forwarded to the chart, in the order TemperatureChart.push() expects.
 _CHART_SENSORS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP_MIX)

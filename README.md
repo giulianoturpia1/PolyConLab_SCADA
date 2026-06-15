@@ -14,22 +14,10 @@ Repository that holds all the SCADA-related utilities for the PolyConLab system,
   - [4.1. Project Structure](#41-project-structure)
   - [4.2. Opening Qt Designer](#42-opening-qt-designer)
   - [4.3. Generating Python Code from .ui Files](#43-generating-python-code-from-ui-files)
-- [5. Adding Functionality to Widgets](#5-adding-functionality-to-widgets)
-  - [5.1. The Four-Layer Architecture](#51-the-four-layer-architecture)
-  - [5.2. Adding a Standard Widget](#52-adding-a-standard-widget)
-  - [5.3. Adding a Custom (Promoted) Widget](#53-adding-a-custom-promoted-widget)
-  - [5.4. Connecting Signals to Python Functions](#54-connecting-signals-to-python-functions)
-  - [5.5. Static Connections in Qt Designer](#55-static-connections-in-qt-designer)
-- [6. Code Quality](#6-code-quality)
-  - [6.1. Installation](#61-installation)
-  - [6.2. Usage](#62-usage)
-- [7. Distribution](#7-distribution)
-  - [7.1. Building with PyInstaller](#71-building-with-pyinstaller)
-  - [7.2. Creating the Installer with InstallForge](#72-creating-the-installer-with-installforge)
-- [8. Known Issues](#8-known-issues)
-  - [8.1. PySide6 and PyInstaller](#81-pyside6-and-pyinstaller)
-  - [8.2. Qt Designer Not Starting](#82-qt-designer-not-starting)
-- [9. Contact Information](#9-contact-information)
+- [5. Distribution](#5-distribution)
+  - [5.1. Building with PyInstaller](#51-building-with-pyinstaller)
+  - [5.2. Creating the Installer with InstallForge](#52-creating-the-installer-with-installforge)
+- [6. Contact Information](#6-contact-information)
 
 ---
 
@@ -157,15 +145,30 @@ The repository is organized as follows:
 ```text
 PolyConLab_SCADA/
 ├── assets/
-│   └── ui/               # Qt Designer source files (.ui). Edit these in Qt Designer.
-├── installer/            # PyInstaller .spec file. The InstallForge .ifp project is created locally and not tracked in version control.
+│   └── ui/                   # Qt Designer source files (.ui). Edit these in Qt Designer.
+├── installer/                # PyInstaller .spec file. The InstallForge .ifp project is created locally and not tracked in version control.
 ├── src/
-│   ├── main.py           # Application entry point.
-│   ├── comms/            # TCP client and SCPI protocol parsing.
-│   ├── ui/               # PySide6 window/widget classes. Generated *_ui.py files also land here.
-│   ├── models/           # Data models (sensor readings, device state, etc.).
-│   └── utils/            # Shared utility functions.
-├── build_ui.py           # Helper script: converts assets/ui/*.ui → src/ui/*_ui.py.
+│   ├── main.py               # Application entry point.
+│   ├── comms/                # TCP client and SCPI protocol parsing.
+│   ├── models/               # Domain models: Device and Sensor enums.
+│   ├── network/              # Raw TCP transport.
+│   ├── ui/
+│   │   ├── main_window_ui.py # Generated glue — NEVER edit by hand. Regenerate with build_ui.py.
+│   │   ├── scada_state.py    # SCADA-side state machine and control permission table.
+│   │   ├── sensor_panel.py   # Coordinator between sensor cards, chart, and PLC client.
+│   │   ├── style/            # Visual infrastructure (colours, animations). No logic.
+│   │   │   ├── anim.py
+│   │   │   └── palette.py
+│   │   ├── widgets/          # Reusable custom Qt widgets (promoted in Qt Designer).
+│   │   │   ├── actuator_row.py
+│   │   │   ├── sensor_card.py
+│   │   │   └── temperature_chart.py
+│   │   └── windows/          # Top-level windows and dialogs.
+│   │       ├── log_window.py
+│   │       ├── main_window.py
+│   │       └── settings_dialog.py
+│   └── utils/                # Shared utility functions.
+├── build_ui.py               # Helper script: converts assets/ui/*.ui → src/ui/*_ui.py.
 ├── requirements.txt
 ├── ruff.toml
 └── README.md
@@ -175,6 +178,7 @@ PolyConLab_SCADA/
 - All visual design work happens in `assets/ui/` using Qt Designer.
 - `.ui` files are compiled to `*_ui.py` modules in `src/ui/` by running `build_ui.py`. They are never loaded at runtime directly.
 - Python application logic lives in `src/`.
+- For a full walkthrough of the widget development cycle (promoted widgets, signal wiring, Qt Designer shortcuts), see [src/ui/widgets/README.md](src/ui/widgets/README.md).
 
 ### 4.2. Opening Qt Designer
 
@@ -214,232 +218,14 @@ class MainWindow(QMainWindow):
 
 ---
 
-## 5. Adding Functionality to Widgets
-
-This section explains the full cycle: from dropping a widget in Qt Designer to having it call Python code at runtime.
-
-### 5.1. The Four-Layer Architecture
-
-Every piece of UI passes through four layers. Understanding this prevents confusion about which file to edit.
-
-```
-assets/ui/main_window.ui        ← visual layout (Qt Designer source)
-        │
-        │  python build_ui.py
-        ▼
-src/ui/main_window_ui.py        ← generated glue — NEVER edit by hand
-src/ui/widgets.py               ← custom widget classes (SensorCard, ActuatorRow, …)
-src/ui/main_window.py           ← application logic, signal wiring, public API
-```
-
-| Layer | What you change | When |
-|---|---|---|
-| `.ui` | Position, size, widget type, object name | Adding or resizing widgets |
-| `widgets.py` | Visual behaviour of custom widgets | Adding a new custom widget class |
-| `main_window.py` | What happens when the user interacts | Adding signals, slots, animations |
-| `main_window_ui.py` | **Nothing** — regenerate with `build_ui.py` | After every `.ui` save |
-
----
-
-### 5.2. Adding a Standard Widget
-
-A **standard widget** is any built-in Qt class (`QPushButton`, `QLabel`, `QSlider`, etc.) that does not need custom Python code for its visual representation.
-
-**Step 1 — Place it in Qt Designer**
-
-1. Open Qt Designer:
-   ```powershell
-   pyside6-designer assets\ui\main_window.ui
-   ```
-2. Drag the desired widget from the Widget Box onto the canvas.
-3. In the **Property Editor** (bottom-right), set `objectName` to a descriptive snake_case name, e.g. `btn_emergency_stop`.
-4. Set any static properties (text, minimum size, enabled, etc.) in the Property Editor.
-5. Save (`Ctrl+S`).
-
-**Step 2 — Regenerate the Python class**
-
-```powershell
-python build_ui.py
-```
-
-After this step, `setupUi()` in `main_window_ui.py` will create `self.btn_emergency_stop` automatically.
-
-**Step 3 — Reference it in `main_window.py`**
-
-Access the widget via `self._ui.<objectName>`:
-
-```python
-# In _configure_widgets():
-self._ui.btn_emergency_stop.setText("Paro de Emergencia")
-
-# In _connect_signals():
-self._ui.btn_emergency_stop.clicked.connect(self._on_emergency_stop)
-
-# New slot method:
-def _on_emergency_stop(self) -> None:
-    """Handle the emergency stop button press."""
-    self.log("Paro de emergencia activado.")
-    # ... send command to PLC
-```
-
----
-
-### 5.3. Adding a Custom (Promoted) Widget
-
-A **promoted widget** is a standard Qt widget whose class is replaced at runtime by one of your own Python classes (e.g. `_SensorCard`, `_ActuatorRow`). Use this when the widget needs custom painting or behaviour that Qt Designer cannot provide.
-
-**Step 1 — Write the class in `widgets.py`**
-
-Your class must:
-- Extend a standard Qt class (`QFrame`, `QWidget`, etc.)
-- Accept `parent` as its **first** argument with a default of `None` — `setupUi` passes only the parent
-
-```python
-# src/ui/widgets.py
-
-class MyGauge(QFrame):
-    """Circular gauge widget for displaying a percentage value."""
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        # build internal layout here …
-
-    def configure(self, label: str) -> None:
-        """Override the default label set in __init__."""
-        ...
-
-    def set_value(self, percent: float) -> None:
-        """Update the displayed percentage."""
-        ...
-```
-
-**Step 2 — Promote the widget in Qt Designer**
-
-1. Drag a **base widget** (e.g. `QFrame`) onto the canvas.
-2. Right-click it → **Promote to…**
-3. Fill in the form:
-
-   | Field | Value |
-   |---|---|
-   | Base class name | `QFrame` (must match what your class extends) |
-   | Promoted class name | `MyGauge` |
-   | Header file | `ui.widgets` |
-
-4. Click **Add**, then **Promote**.
-5. Set `objectName` (e.g. `gauge_pressure`) and any size constraints.
-6. Save and run `python build_ui.py`.
-
-**Step 3 — Call `configure()` in `main_window.py`**
-
-`setupUi` constructs the widget with only the parent argument. Set its runtime properties in `_configure_widgets()`:
-
-```python
-def _configure_widgets(self) -> None:
-    ...
-    self._ui.gauge_pressure.configure("Presión")
-```
-
----
-
-### 5.4. Connecting Signals to Python Functions
-
-All signal wiring belongs in `_connect_signals()` in `main_window.py`. Every interactive widget exposes one or more **signals**; connect each to a method (slot) on `MainWindow`.
-
-**Common signal patterns**
-
-```python
-def _connect_signals(self) -> None:
-    # Button clicked
-    self._ui.btn_my_action.clicked.connect(self._on_my_action)
-
-    # Slider or spinbox value changed
-    self._ui.my_slider.valueChanged.connect(self._on_slider_changed)
-
-    # Check box toggled
-    self._ui.chk_enable.toggled.connect(self._on_enable_toggled)
-
-    # Custom widget signal (defined with Signal() in widgets.py)
-    self._ui.my_gauge.value_changed.connect(self._on_gauge_value)
-```
-
-**Slot naming convention**
-
-| Trigger | Slot name |
-|---|---|
-| User presses a button | `_on_<objectName>` |
-| TCP / hardware event | `_on_tcp_<event>` |
-| Menu action | `_toggle_<thing>` or `_open_<dialog>` |
-
-**Full example — adding a "Reset counters" button**
-
-```python
-# _connect_signals():
-self._ui.btn_reset.clicked.connect(self._on_btn_reset)
-
-# New slot:
-def _on_btn_reset(self) -> None:
-    """Send the reset command to the PLC and log the action."""
-    self._tcp.send(b"RESET\r\n")
-    self.log("Contadores reiniciados.")
-```
-
----
-
-### 5.5. Static Connections in Qt Designer
-
-For simple widget-to-widget connections that need no Python logic (e.g. a slider synced to a spin box), wire them directly in Qt Designer instead of in Python:
-
-1. Press **F4** (or select Edit → Edit Signals/Slots mode).
-2. Drag from the **sender** widget to the **receiver** widget.
-3. Choose the signal and slot in the dialog (e.g. `valueChanged(int)` → `setValue(int)`).
-4. Save and run `python build_ui.py`.
-
-The connection is emitted inside the generated `setupUi()` and requires no code in `main_window.py`.
-
-> **Note:** The existing `heater_slider ↔ heater_spinbox` bidirectional sync is wired this way.
-
----
-
-## 6. Code Quality
-
-This project uses [Ruff](https://docs.astral.sh/ruff/) for both linting and formatting. Configuration is defined in `ruff.toml`.
-
-### 6.1. Installation
-
-Ruff is included in `requirements.txt` and is installed as part of the standard setup step. No additional installation is needed.
-
-### 6.2. Usage
-
-Run the linter to check for issues:
-
-```powershell
-ruff check src/
-```
-
-Run the formatter to auto-format all source files:
-
-```powershell
-ruff format src/
-```
-
-Fix auto-fixable lint issues:
-
-```powershell
-ruff check --fix src/
-```
-
-It is recommended to run these commands before committing changes to keep the codebase consistent.
-
----
-
-## 7. Distribution
+## 5. Distribution
 
 The application is distributed as a standalone Windows executable. The process involves two tools:
 
 1. **PyInstaller** — bundles the Python application and all its dependencies into a single `.exe`.
 2. **InstallForge** — wraps the executable into a Windows installer (`.exe` setup wizard).
 
-### 7.1. Building with PyInstaller
+### 5.1. Building with PyInstaller
 
 With the virtual environment active and from the repository root:
 
@@ -455,28 +241,28 @@ dist/PolyConLab_SCADA/PolyConLab_SCADA.exe
 
 > **Before your first build:** Run `python build_ui.py` to ensure all `.ui` files have been compiled to Python modules.
 
-### 7.2. Creating the Installer with InstallForge
+### 5.2. Creating the Installer with InstallForge
 
 The InstallForge project file (`.ifp`) is **not tracked in version control** and must be created once per machine. After the first-time setup, you only need to open the saved project and click Build.
 
-This generates a file that can then be re-run should the SCADA have any changes. This is mainly for creating an installer for the SCADA,for Windows.
+This generates a file that can then be re-run should the SCADA have any changes. This is mainly for creating an installer for the SCADA, for Windows.
 
-> **Prerequisite:** Complete section 7.1 first. The `dist/PolyConLab_SCADA/` folder must exist before configuring InstallForge.
+> **Prerequisite:** Complete section 5.1 first. The `dist/PolyConLab_SCADA/` folder must exist before configuring InstallForge.
 
-#### 7.2.1. First-time Setup
+#### 5.2.1. First-time Setup
 
 InstallForge's settings are organised in a sidebar on the left with five groups: **General**, **Setup**, **Dialogs**, **System**, and **Build**. Work through them top to bottom.
 
 ---
 
-##### Step 1 — Create a new project**
+##### Step 1 — Create a new project
 
 1. Launch InstallForge.
 2. Go to **File → New** to create a blank project.
 
 ---
 
-##### Step 2 — General → General**
+##### Step 2 — General → General
 
 Fill in the application metadata:
 
@@ -491,7 +277,7 @@ Under the "Languages" tab, check the box for the language which the installer sh
 
 ---
 
-##### Step 3 — Setup → Files**
+##### Step 3 — Setup → Files
 
 This is the most important step — it tells InstallForge what to bundle.
 
@@ -509,7 +295,7 @@ After this step the file list should show the folder and executable file we just
 
 ---
 
-##### Step 4 — Setup → Uninstallation**
+##### Step 4 — Setup → Uninstallation
 
 Enable the uninstaller so the app appears in Windows **Apps & features**:
 
@@ -519,7 +305,7 @@ Enable the uninstaller so the app appears in Windows **Apps & features**:
 
 ---
 
-##### Step 5 — Dialogs → Finish**
+##### Step 5 — Dialogs → Finish
 
 We should let the user be able to instantly run the SCADA after installation, for this reason, follow the next steps. These will allow the user to do so. Do the following:
 
@@ -531,7 +317,7 @@ We should let the user be able to instantly run the SCADA after installation, fo
 
 ---
 
-##### Step 6 — System → Shortcuts**
+##### Step 6 — System → Shortcuts
 
 The installer creates a shortcut so users can launch the app from the Desktop:
 
@@ -545,9 +331,9 @@ The installer creates a shortcut so users can launch the app from the Desktop:
 
 ---
 
-##### Step 7 — Build → Build**
+##### Step 7 — Build → Build
 
-In the Build tab, inside Build, we set the final steps before creating the installer four our SCADA application. To do so, follow the next steps.
+In the Build tab, inside Build, we set the final steps before creating the installer for our SCADA application. To do so, follow the next steps.
 
 1. Next to **Setup File**, click `…` and browse to `installer\` inside the repository root.
 2. Set the filename to `PolyConLab_SCADA_Setup.exe`.
@@ -561,7 +347,7 @@ The `PolyConLab_SCADA_Setup.exe` is the installer we will be distributing.
 
 ---
 
-##### Step 8 — Save the Project**
+##### Step 8 — Save the Project
 
 1. Go to **File → Save As**.
 2. Save as `installer\polyconlab_scada.ifp` inside the repository root.
@@ -570,55 +356,25 @@ This path is in `.gitignore` and will not be committed to the repository.
 
 ---
 
-##### Step 9 — Build**
+##### Step 9 — Build
 
 1. Click **Build** in the top toolbar (or go to **Build → Build**).
 2. InstallForge will package all files and write the installer to `installer\PolyConLab_SCADA_Setup.exe`.
 
 ---
 
-#### 7.2.2. Subsequent Builds
+#### 5.2.2. Subsequent Builds
 
 Once the `.ifp` project file exists on your machine, rebuilding is a two-step process:
 
-1. Re-run PyInstaller to refresh `dist\PolyConLab_SCADA\` (see section 7.1).
+1. Re-run PyInstaller to refresh `dist\PolyConLab_SCADA\` (see section 5.1).
 2. Open InstallForge, load `installer\polyconlab_scada.ifp`, and click **Build**.
 
 The finished installer will always be placed at `installer\PolyConLab_SCADA_Setup.exe` (excluded from version control).
 
 ---
 
-## 8. Known Issues
-
-### 8.1. PySide6 and PyInstaller
-
-PyInstaller may miss some PySide6 plugins or QML modules, resulting in a packaged app that crashes on startup. If this happens, add the following flag to the `Analysis` block in `installer/polyconlab_scada.spec`:
-
-```python
-from PyInstaller.utils.hooks import collect_all
-datas, binaries, hiddenimports = collect_all('PySide6')
-```
-
-Then re-run `pyinstaller installer/polyconlab_scada.spec`.
-
-### 8.2. Qt Designer Not Starting
-
-If `pyside6-designer` fails to launch or is not found, ensure the virtual environment is active and that `PySide6` was installed correctly:
-
-```powershell
-pip show PySide6
-pyside6-designer --version
-```
-
-If the command still fails, try invoking it as a Python module:
-
-```powershell
-python -m PySide6.scripts.designer
-```
-
----
-
-## 9. Contact Information
+## 6. Contact Information
 
 For any questions or further information, please reach out to:
 

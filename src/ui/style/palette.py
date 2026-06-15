@@ -1,6 +1,6 @@
 """
 Color palette shared across all UI modules.
-Import as:  from ui import palette as col
+Import as:  from ui.style import palette as col
 """
 
 from __future__ import annotations

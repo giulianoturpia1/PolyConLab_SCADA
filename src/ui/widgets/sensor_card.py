@@ -12,8 +12,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui import palette as col
-from ui.anim import Fade
+from ui.style import palette as col
+from ui.style.anim import Fade
 
 # ── Sizing / timing constants ─────────────────────────────────────────────────
 _CARD_MIN_W = 100  # minimum card width in pixels
