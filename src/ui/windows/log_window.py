@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui import palette as col
+from ui.style import palette as col
 
 
 class LogWindow(QWidget):

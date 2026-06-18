@@ -280,20 +280,27 @@ QMenu::item:selected {
              </item>
              <item>
               <widget class="QPushButton" name="btn_estop">
-               <property name="text"><string>E-STOP</string></property>
+               <property name="text"><string>Detener</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Detiene el sistema de forma segura: apaga actuadores, cierra válvulas y desconecta.
+Reconecte para iniciar una nueva sesión.</string></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_ack">
-               <property name="text"><string>Ack. Falla</string></property>
+               <property name="text"><string>Aceptar Falla</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Reconoce la falla y confirma que la condición fue resuelta.
+Si el sistema estaba en MANUAL antes de la falla, vuelve directamente a MANUAL.
+Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></property>
               </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btn_retry">
-               <property name="text"><string>Retry Checkup</string></property>
+               <property name="text"><string>Reintentar Chequeo</string></property>
                <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Solicita al PLC repetir el CHEQUEO completo y re-verifica todos los sensores.
+Úselo si un sensor no respondió durante el inicio.</string></property>
               </widget>
              </item>
             </layout>
@@ -324,7 +331,7 @@ QMenu::item:selected {
           <property name="spacing"><number>10</number></property>
           <item>
            <widget class="QGroupBox" name="grp_readings">
-            <property name="title"><string>Lecturas en Tiempo Real</string></property>
+            <property name="title"><string>Sensores</string></property>
             <layout class="QHBoxLayout" name="hbox_readings">
              <property name="spacing"><number>8</number></property>
              <item>
@@ -376,11 +383,6 @@ QMenu::item:selected {
              <property name="bottomMargin"><number>4</number></property>
              <property name="spacing"><number>4</number></property>
              <item>
-              <widget class="QWidget" name="series_toggles_container">
-               <property name="maximumSize"><size><width>16777215</width><height>36</height></size></property>
-              </widget>
-             </item>
-             <item>
               <widget class="QChartView" name="chart_view">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
@@ -407,7 +409,7 @@ QMenu::item:selected {
           <property name="bottomMargin"><number>0</number></property>
           <item>
            <widget class="QGroupBox" name="grp_ctrl">
-            <property name="title"><string>Control de Actuadores</string></property>
+            <property name="title"><string>Actuadores</string></property>
             <layout class="QVBoxLayout" name="vbox_ctrl">
              <property name="spacing"><number>6</number></property>
              <item>
