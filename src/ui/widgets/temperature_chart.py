@@ -8,6 +8,9 @@ temperature SensorCard click in MainWindow enables or disables its series.
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
+
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
@@ -35,9 +38,10 @@ class TemperatureChart(QObject):
         super().__init__()
         self._t = 0
         self._series: list[QLineSeries] = []
+        self._history: list[dict[str, float | None]] = []
 
-        chart = self._build_chart()
-        chart_view.setChart(chart)
+        self._chart = self._build_chart()
+        chart_view.setChart(self._chart)
         chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
 
     # ── Internal setup ───────────────────────────────────────────────────────
@@ -116,7 +120,45 @@ class TemperatureChart(QObject):
                 updated.append(s)
         self._t += 1
 
+        self._history.append(
+            {
+                "index": t,
+                "T. Entrada": tin,
+                "T. Salida": tout,
+                "T. Cámara": tcam,
+                "T. Mezcla": tmez,
+            }
+        )
+
         if t >= self.WINDOW:
             self._ax_x.setRange(t - self.WINDOW + 1, t)
             for s in updated:
                 s.removePoints(0, 1)
+
+    def export_history(self, path: str | Path, limit: int = 50) -> bool:
+        """Export the last ``limit`` measurement rows to a CSV file."""
+        rows = self._history[-limit:] if limit > 0 else self._history
+        if not rows:
+            return False
+
+        with Path(path).open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["index", "T. Entrada", "T. Salida", "T. Cámara", "T. Mezcla"])
+            for row in rows:
+                writer.writerow(
+                    [
+                        row.get("index", ""),
+                        self._format_value(row.get("T. Entrada")),
+                        self._format_value(row.get("T. Salida")),
+                        self._format_value(row.get("T. Cámara")),
+                        self._format_value(row.get("T. Mezcla")),
+                    ]
+                )
+
+        return True
+
+    @staticmethod
+    def _format_value(value: float | None) -> str:
+        if value is None:
+            return ""
+        return f"{value:.3f}".rstrip("0").rstrip(".")

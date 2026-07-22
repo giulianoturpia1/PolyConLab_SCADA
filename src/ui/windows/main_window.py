@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtGui import QIcon, QPixmap
-from PySide6.QtWidgets import QMainWindow
+from PySide6.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QMessageBox
 
 from comms.init_sequence import InitSequence
 from comms.plc_client import PlcClient
@@ -172,6 +172,7 @@ class MainWindow(QMainWindow):
         self._ui.btn_estop.clicked.connect(self._on_stop_clicked)
         self._ui.btn_ack.clicked.connect(self._on_ack_clicked)
         self._ui.btn_retry.clicked.connect(self._on_retry_clicked)
+        self._ui.action_download.triggered.connect(self._download_data)
 
     # ── Connection lifecycle slots ────────────────────────────────────────────
 
@@ -322,6 +323,32 @@ class MainWindow(QMainWindow):
         self._init_seq.restart()
 
     # ── Misc slots ────────────────────────────────────────────────────────────
+
+    def _download_data(self) -> None:
+        """Export a configurable number of measurements to CSV on the user's computer.
+
+        Prompts the user for how many measurements to save (default 50).
+        """
+        # Ask user for number of measurements
+        default_limit = 50
+        limit, ok = QInputDialog.getInt(self, "Cantidad de mediciones", "Número de mediciones a guardar:", default_limit, 1, 100000, 1)
+        if not ok:
+            return
+
+        default_name = f"mediciones_{QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')}.csv"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar datos",
+            default_name,
+            "Archivos CSV (*.csv)",
+        )
+        if not file_path:
+            return
+
+        if self._chart.export_history(file_path, limit=limit):
+            self.log(f"Datos descargados en {file_path} ({limit} filas).")
+        else:
+            QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")
 
     def _on_log_message(self, msg: str) -> None:
         """Send a raw message typed in the log window to the PLC."""
