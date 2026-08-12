@@ -46,6 +46,7 @@ class MainWindow(QMainWindow):
 
         self._host = _DEFAULT_HOST
         self._port = _DEFAULT_PORT
+        self._temp_control_enabled = False  # Temperature control toggle state
 
         self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
         self._ui.btn_estop.clicked.connect(self._on_stop_clicked)
         self._ui.btn_ack.clicked.connect(self._on_ack_clicked)
         self._ui.btn_retry.clicked.connect(self._on_retry_clicked)
+        self._ui.btn_temp_control.clicked.connect(self._on_temp_control_clicked)
         self._ui.action_download.triggered.connect(self._download_data)
 
     # ── Connection lifecycle slots ────────────────────────────────────────────
@@ -322,6 +324,30 @@ class MainWindow(QMainWindow):
         self._sensor_panel.clear_faults()
         self._init_seq.restart()
 
+    def _on_temp_control_clicked(self) -> None:
+        """Send the temperature control setpoint to the PLC and toggle visual feedback."""
+        value = self._ui.heater_spinbox.value()
+        line = f"TEMP:SET:IN,{value}"
+        if self._plc.send_raw(line):
+            # Toggle the enabled state and update button appearance
+            self._temp_control_enabled = not self._temp_control_enabled
+            self._update_temp_control_button_style()
+            status = "ACTIVADO" if self._temp_control_enabled else "DESACTIVADO"
+            self.log(f"Control de temperatura {status}: {line}")
+        else:
+            self.log("No conectado — comando de temperatura no enviado.")
+
+    def _update_temp_control_button_style(self) -> None:
+        """Update the temperature control button color based on enabled state."""
+        if self._temp_control_enabled:
+            # Green when active
+            self._ui.btn_temp_control.setStyleSheet(
+                "background-color: #2ECC71; color: white; font-weight: bold; border-radius: 4px;"
+            )
+        else:
+            # Default style when inactive
+            self._ui.btn_temp_control.setStyleSheet("font-weight: bold;")
+
     # ── Misc slots ────────────────────────────────────────────────────────────
 
     def _download_data(self) -> None:
@@ -370,6 +396,7 @@ class MainWindow(QMainWindow):
             row.set_enabled_buttons(c.actuators)
         self._ui.heater_slider.setEnabled(c.actuators)
         self._ui.heater_spinbox.setEnabled(c.actuators)
+        self._ui.btn_temp_control.setEnabled(c.actuators)
         self._ui.btn_pause.setEnabled(c.pause)
         self._ui.btn_resume.setEnabled(c.resume)
         self._ui.btn_estop.setEnabled(c.stop)
@@ -393,6 +420,8 @@ class MainWindow(QMainWindow):
         self._transition(ScadaState.DISCONNECTED)
         self._sensor_panel.reset()
         self._sensor_panel.set_interactive(False)
+        self._temp_control_enabled = False  # Reset temperature control state
+        self._update_temp_control_button_style()  # Reset button style
         self._ui.lbl_conn.setText("● Desconectado")
         self._ui.lbl_conn.setStyleSheet(
             f"color:{col.GRAY};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
