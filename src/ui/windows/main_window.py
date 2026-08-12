@@ -269,6 +269,9 @@ class MainWindow(QMainWindow):
             # PLC state (typically SOFT ERROR after a sensor fault).
             self._plc.query_state()
 
+        # Query all actuator states to sync button display with actual PLC state
+        self._plc.query_all_actuator_states()
+
         # Always start the periodic STATE? poll — even after a failed init —
         # so the SCADA tracks state changes during fault recovery.
         self._plc.start_state_polling()

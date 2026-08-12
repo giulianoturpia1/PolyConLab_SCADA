@@ -9,6 +9,7 @@ temperature SensorCard click in MainWindow enables or disables its series.
 from __future__ import annotations
 
 import csv
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
@@ -52,7 +53,6 @@ class TemperatureChart(QObject):
         chart.setBackgroundBrush(QColor(col.PANEL))
         chart.setPlotAreaBackgroundBrush(QColor(col.BG))
         chart.setPlotAreaBackgroundVisible(True)
-        chart.legend().hide()  # redundant with the custom series-toggle buttons below
         chart.setTitle("")
 
         for name, color in _SERIES_CFG:
@@ -62,6 +62,13 @@ class TemperatureChart(QObject):
             s.setVisible(False)  # hidden until the user enables polling
             chart.addSeries(s)
             self._series.append(s)
+
+        # Configure and show legend with color reference for each sensor
+        legend = chart.legend()
+        legend.setVisible(True)
+        legend.setAlignment(Qt.AlignmentFlag.AlignTop)
+        legend.setBackgroundVisible(False)
+        legend.setLabelColor(QColor(col.TEXT))
 
         self._ax_x = QValueAxis()
         self._ax_x.setRange(0, self.WINDOW)
@@ -122,7 +129,7 @@ class TemperatureChart(QObject):
 
         self._history.append(
             {
-                "index": t,
+                "timestamp": datetime.now().isoformat(),
                 "T. Entrada": tin,
                 "T. Salida": tout,
                 "T. Cámara": tcam,
@@ -143,11 +150,11 @@ class TemperatureChart(QObject):
 
         with Path(path).open("w", newline="", encoding="utf-8") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["index", "T. Entrada", "T. Salida", "T. Cámara", "T. Mezcla"])
+            writer.writerow(["Timestamp", "T. Entrada", "T. Salida", "T. Cámara", "T. Mezcla"])
             for row in rows:
                 writer.writerow(
                     [
-                        row.get("index", ""),
+                        row.get("timestamp", ""),
                         self._format_value(row.get("T. Entrada")),
                         self._format_value(row.get("T. Salida")),
                         self._format_value(row.get("T. Cámara")),

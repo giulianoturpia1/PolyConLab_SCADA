@@ -151,6 +151,28 @@ class PlcClient(QObject):
         self._pending.append(_Pending(self._resolve_state, quiet=True))
         return True
 
+    def query_all_actuator_states(self) -> bool:
+        """Query the state of all actuators and emit :attr:`actuator_changed` for each.
+
+        Returns False if not connected. Multiple back-to-back calls are safe.
+        """
+        if not self._tcp.is_connected:
+            return False
+
+        queries = [
+            (Device.HEATER, Cmd.HEAT_STATE),
+            (Device.PUMP, Cmd.PUMP_STATE),
+            (Device.CHILLER, Cmd.CHILL_STATE),
+            (Device.VALVE1, Cmd.valve_state(1)),
+            (Device.VALVE2, Cmd.valve_state(2)),
+        ]
+
+        for dev, query in queries:
+            if self._send_line(query, quiet=True):
+                self._pending.append(_Pending(partial(self._resolve_actuator_state, dev), quiet=True))
+
+        return True
+
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
         """Query every sensor once and report pass/fail per sensor via *on_done*.
 
@@ -256,6 +278,19 @@ class PlcClient(QObject):
             return True
         if is_error(line):
             self.actuator_rejected.emit(dev)
+            return True
+        return False
+
+    def _resolve_actuator_state(self, dev: Device, line: str) -> bool:
+        """Resolve a state query response and emit the actual state.
+
+        Maps ON/OPEN to True, OFF/CLOSED to False. Ignores errors and unknown responses.
+        """
+        if line in (Resp.ON, Resp.OPEN):
+            self.actuator_changed.emit(dev, True)
+            return True
+        if line in (Resp.OFF, Resp.CLOSED):
+            self.actuator_changed.emit(dev, False)
             return True
         return False
 
