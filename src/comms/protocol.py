@@ -51,6 +51,11 @@ class Cmd:
     LOG_STATE = "SYST:LOG?"
     FAULT_QUERY = "SYST:FAULT?"  # Query which devices failed hardware initialisation
 
+    # Temperature control (manual inlet setpoint). The FW handles TEMP:SET:IN as a
+    # LOCAL TOGGLE in ManualState and sends no positive confirmation, so the SCADA
+    # cannot treat it as a state-authoritative command (see MainWindow).
+    TEMP_SET_IN = "TEMP:SET:IN"
+
     # Valves are parameterized by number, appended after a comma
     # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve numbers 1 and 2 only.
     @staticmethod
@@ -67,6 +72,11 @@ class Cmd:
     def valve_state(n: int) -> str:
         """Query for the state of valve ``n``."""
         return f"OUTP:VALV?,{n}"
+
+    @staticmethod
+    def temp_set_in(value: float) -> str:
+        """Command line to set the inlet temperature setpoint (toggles control in the FW)."""
+        return f"{Cmd.TEMP_SET_IN},{value}"
 
 
 class Evt:

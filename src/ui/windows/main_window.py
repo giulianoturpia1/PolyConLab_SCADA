@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QMessageBo
 
 from comms.init_sequence import InitSequence
 from comms.plc_client import PlcClient
-from comms.protocol import Evt
+from comms.protocol import Cmd, Evt
 from models import Device, Sensor
 from ui.main_window_ui import Ui_MainWindow
 from ui.scada_state import ScadaState, STATE_CONTROLS, from_plc
@@ -46,7 +46,7 @@ class MainWindow(QMainWindow):
 
         self._host = _DEFAULT_HOST
         self._port = _DEFAULT_PORT
-        self._temp_control_enabled = False  # Temperature control toggle state
+        self._temp_control_requested = False  # Last temp-control request made in MANUAL (not verified PLC state)
 
         self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
@@ -265,16 +265,15 @@ class MainWindow(QMainWindow):
             self.log(f"Inicialización completa: {msg}")
         else:
             self.log(f"Error de inicialización: {msg}")
-            # Query state once so the label and buttons reflect the current
-            # PLC state (typically SOFT ERROR after a sensor fault).
-            self._plc.query_state()
 
-        # Query all actuator states to sync button display with actual PLC state
-        self._plc.query_all_actuator_states()
-
-        # Always start the periodic STATE? poll — even after a failed init —
-        # so the SCADA tracks state changes during fault recovery.
+        # Always start the periodic STATE? poll — even after a failed init — so
+        # the SCADA tracks state changes during fault recovery.
         self._plc.start_state_polling()
+        # Query state once immediately: the resulting transition reconciles all
+        # controls from the PLC (see _transition → _reconcile_controls), so this
+        # replaces the old one-shot actuator query and works for both the MANUAL
+        # (success) and fault (failure) paths without a special case.
+        self._plc.query_state()
 
     # ── State polling slot ────────────────────────────────────────────────────
 
@@ -328,27 +327,39 @@ class MainWindow(QMainWindow):
         self._init_seq.restart()
 
     def _on_temp_control_clicked(self) -> None:
-        """Send the temperature control setpoint to the PLC and toggle visual feedback."""
+        """Send the temperature-control toggle to the PLC and reflect the request.
+
+        The FW handles ``TEMP:SET:IN`` as a local toggle in ManualState and sends
+        no positive confirmation, so the SCADA cannot verify the control's true
+        state. This indicator therefore reflects only the last request made while
+        in MANUAL; it is force-cleared whenever the PLC leaves MANUAL or the link
+        drops (see :meth:`_transition` / :meth:`_reset_to_disconnected`). A truly
+        PLC-driven indicator would require an FW readback (e.g. ``TEMP:CTRL?``) or
+        a confirmed reply for the setpoint command.
+        """
         value = self._ui.heater_spinbox.value()
-        line = f"TEMP:SET:IN,{value}"
+        line = Cmd.temp_set_in(value)
         if self._plc.send_raw(line):
-            # Toggle the enabled state and update button appearance
-            self._temp_control_enabled = not self._temp_control_enabled
-            self._update_temp_control_button_style()
-            status = "ACTIVADO" if self._temp_control_enabled else "DESACTIVADO"
+            self._set_temp_control_requested(not self._temp_control_requested)
+            status = "ACTIVADO" if self._temp_control_requested else "DESACTIVADO"
             self.log(f"Control de temperatura {status}: {line}")
         else:
             self.log("No conectado — comando de temperatura no enviado.")
 
+    def _set_temp_control_requested(self, requested: bool) -> None:
+        """Set the temp-control request indicator and repaint the button."""
+        self._temp_control_requested = requested
+        self._update_temp_control_button_style()
+
     def _update_temp_control_button_style(self) -> None:
-        """Update the temperature control button color based on enabled state."""
-        if self._temp_control_enabled:
-            # Green when active
+        """Repaint the temperature-control button to reflect the last request."""
+        if self._temp_control_requested:
+            # Green while control was last requested ON (in MANUAL).
             self._ui.btn_temp_control.setStyleSheet(
                 "background-color: #2ECC71; color: white; font-weight: bold; border-radius: 4px;"
             )
         else:
-            # Default style when inactive
+            # Default style otherwise.
             self._ui.btn_temp_control.setStyleSheet("font-weight: bold;")
 
     # ── Misc slots ────────────────────────────────────────────────────────────
@@ -387,9 +398,32 @@ class MainWindow(QMainWindow):
     # ── State machine ─────────────────────────────────────────────────────────
 
     def _transition(self, new_state: ScadaState) -> None:
-        """Move to a new SCADA state and apply the corresponding control permissions."""
+        """Move to a new SCADA state, apply control permissions, and reconcile on change.
+
+        Reconciliation is centralized here: on entry to MANUAL every control is
+        re-synced from the PLC (never assumed); on exit from MANUAL the
+        temperature-control indicator is cleared, because the FW disables that
+        control outside MANUAL.
+        """
+        previous = self._scada_state
         self._scada_state = new_state
         self._apply_state_gating()
+
+        if new_state == previous:
+            return
+        if new_state == ScadaState.MANUAL:
+            self._reconcile_controls()
+        elif previous == ScadaState.MANUAL:
+            self._set_temp_control_requested(False)
+
+    def _reconcile_controls(self) -> None:
+        """Query the PLC for the authoritative state of every actuator and repaint.
+
+        Called on entry to MANUAL (including right after init). The actuator rows
+        are painted only from the PLC's replies (via :meth:`_on_actuator_changed`),
+        so the UI reflects the PLC and never a SCADA-side assumption.
+        """
+        self._plc.query_all_actuator_states()
 
     def _apply_state_gating(self) -> None:
         """Enable or disable controls by looking up the current state in STATE_CONTROLS."""
@@ -423,8 +457,9 @@ class MainWindow(QMainWindow):
         self._transition(ScadaState.DISCONNECTED)
         self._sensor_panel.reset()
         self._sensor_panel.set_interactive(False)
-        self._temp_control_enabled = False  # Reset temperature control state
-        self._update_temp_control_button_style()  # Reset button style
+        for row in self._act_rows:
+            row.set_active(False)  # clear any stale ON styling from the last session
+        self._set_temp_control_requested(False)
         self._ui.lbl_conn.setText("● Desconectado")
         self._ui.lbl_conn.setStyleSheet(
             f"color:{col.GRAY};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
