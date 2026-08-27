@@ -537,6 +537,7 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
    <widget class="QMenu" name="menu_avanzado">
     <property name="title"><string>Avanzado</string></property>
     <addaction name="action_log"/>
+    <addaction name="action_download"/>
    </widget>
    <widget class="QMenu" name="menu_configuracion">
     <property name="title"><string>Configuración</string></property>
@@ -550,6 +551,9 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
   </action>
   <action name="action_connection">
    <property name="text"><string>Conexión...</string></property>
+  </action>
+  <action name="action_download">
+   <property name="text"><string>Descargar datos</string></property>
   </action>
  </widget>
  <customwidgets>
