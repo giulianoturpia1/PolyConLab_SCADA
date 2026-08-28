@@ -27,9 +27,17 @@ class StateLabel:
     def __init__(self, label: QLabel) -> None:
         self._label = label
         self._fade = Fade(label, duration=STATE_LABEL_FADE_MS)
+        self._current: str | None = None  # last painted state; skip redundant repaints
 
     def set_state(self, raw: str) -> None:
-        """Set the label to *raw*, colour it by state, and fade it in."""
+        """Set the label to *raw*, colour it by state, and fade it in.
+
+        No-op when *raw* already matches the painted state, so the periodic
+        STATE? poll does not replay the fade every cycle when nothing changed.
+        """
+        if raw == self._current:
+            return
+        self._current = raw
         color = col.STATE_COLOR.get(raw, col.GRAY)
         self._label.setText(raw)
         self._label.setStyleSheet(

@@ -15,10 +15,17 @@ from PySide6.QtWidgets import QAbstractButton, QAbstractSlider, QSpinBox
 
 from comms.plc_client import PlcClient
 from comms.protocol import Cmd
+from ui.style import palette as col
+
+# Corner rounding for the toggle button, in px.
+_BORDER_RADIUS_PX = 4
 
 # Button style while control was last requested ON (in MANUAL).
-_ACTIVE_STYLE = "background-color: #2ECC71; color: white; font-weight: bold; border-radius: 4px;"
-_IDLE_STYLE = "font-weight: bold;"
+_ACTIVE_STYLE = (
+    f"background-color:{col.GREEN};color:{col.WHITE};"
+    f"font-weight:bold;border-radius:{_BORDER_RADIUS_PX}px;"
+)
+_IDLE_STYLE = "font-weight:bold;"
 
 
 class TemperatureControl(QObject):
