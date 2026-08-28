@@ -22,7 +22,7 @@ _BORDER_RADIUS_PX = 4
 
 # Button style while control was last requested ON (in MANUAL).
 _ACTIVE_STYLE = (
-    f"background-color:{col.GREEN};color:{col.WHITE};"
+    f"background-color:{col.ACTIVE};color:{col.WHITE};"
     f"font-weight:bold;border-radius:{_BORDER_RADIUS_PX}px;"
 )
 _IDLE_STYLE = "font-weight:bold;"

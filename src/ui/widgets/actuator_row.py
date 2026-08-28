@@ -37,11 +37,11 @@ def _btn_style(active: bool) -> str:
     """Return the stylesheet for an ON button in its active or inactive state."""
     if active:
         return _BTN_TMPL.format(
-            border=col.GREEN,
-            bg=col.GREEN,
+            border=col.ACTIVE,
+            bg=col.ACTIVE,
             fg=col.BG,
-            hover_bg=col.GREEN_HOVER,
-            hover_border=col.GREEN_HOVER,
+            hover_bg=col.ACTIVE_HOVER,
+            hover_border=col.ACTIVE_HOVER,
         )
     return _BTN_TMPL.format(
         border=col.BORDER,
