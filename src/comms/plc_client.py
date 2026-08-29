@@ -15,7 +15,7 @@ from functools import partial
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
-from comms.protocol import ACTUATORS, SENSORS, Cmd, Resp, is_error, parse_value
+from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, parse_value
 from models import Device, Sensor
 from network.tcp_client import TcpClient
 
@@ -52,6 +52,7 @@ class PlcClient(QObject):
     actuator_rejected = Signal(object)  # (Device) — PLC refused the command
     sensor_updated = Signal(object, str)  # (Sensor, value) — fresh reading as a display string
     sensor_fault = Signal(object)  # (Sensor) — sensor reply was an error
+    sensor_reinit_result = Signal(object, bool)  # (Sensor, ok) — reply to a SYST:REINIT command
 
     # Diagnostic / init events.
     state_received = Signal(str)  # reply to a STATE? query — carries the raw state name string
@@ -173,6 +174,17 @@ class PlcClient(QObject):
 
         return True
 
+    def reinit_sensor(self, sensor: Sensor) -> bool:
+        """Ask the PLC to re-initialise *sensor*; the reply surfaces as :attr:`sensor_reinit_result`.
+
+        Returns False if not connected. Sent non-quiet so the operator sees the
+        recovery attempt in the log terminal.
+        """
+        if not self._send_line(REINIT[sensor]):
+            return False
+        self._pending.append(_Pending(partial(self._resolve_reinit, sensor)))
+        return True
+
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
         """Query every sensor once and report pass/fail per sensor via *on_done*.
 
@@ -270,6 +282,16 @@ class PlcClient(QObject):
         """Accept the next response line as the FSM state name and emit it."""
         self.state_received.emit(line)
         return True
+
+    def _resolve_reinit(self, sensor: Sensor, line: str) -> bool:
+        """Confirm on Resp.OK, fail on an error reply, ignore anything else."""
+        if line == Resp.OK:
+            self.sensor_reinit_result.emit(sensor, True)
+            return True
+        if is_error(line):
+            self.sensor_reinit_result.emit(sensor, False)
+            return True
+        return False
 
     def _resolve_actuator(self, dev: Device, on: bool, expected: str, line: str) -> bool:
         """Confirm on the expected reply, reject on an error, ignore anything else."""

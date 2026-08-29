@@ -108,6 +108,18 @@ class SensorPanel(QObject):
         if not ok:
             self._cards[sensor].set_fault(True)
 
+    def clear_fault(self, sensor: Sensor) -> None:
+        """Clear the init-probe fault indicator on a single card and blank its value.
+
+        ``SensorCard.set_fault(False)`` only reverts the border; the value label
+        keeps its ``"FALLO"`` text until the next poll, and re-init runs in SOFT
+        ERROR where polling is paused — so blank the value here to show the card
+        recovered.
+        """
+        card = self._cards[sensor]
+        card.set_fault(False)
+        card.set_value("--")
+
     def clear_faults(self) -> None:
         """Clear init-probe fault indicators on all cards."""
         for card in self._cards.values():

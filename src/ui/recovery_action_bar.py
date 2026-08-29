@@ -21,6 +21,7 @@ class RecoveryActionBar(QObject):
     stop = Signal()
     ack = Signal()
     retry = Signal()
+    reinit = Signal()
 
     def __init__(
         self,
@@ -29,6 +30,7 @@ class RecoveryActionBar(QObject):
         estop_btn: QAbstractButton,
         ack_btn: QAbstractButton,
         retry_btn: QAbstractButton,
+        reinit_btn: QAbstractButton,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
@@ -37,25 +39,28 @@ class RecoveryActionBar(QObject):
         self._estop = estop_btn
         self._ack = ack_btn
         self._retry = retry_btn
-        self._buttons = [pause_btn, resume_btn, estop_btn, ack_btn, retry_btn]
+        self._reinit = reinit_btn
+        self._buttons = [pause_btn, resume_btn, estop_btn, ack_btn, retry_btn, reinit_btn]
 
         self._pause.clicked.connect(self.pause)
         self._resume.clicked.connect(self.resume)
         self._estop.clicked.connect(self.stop)
         self._ack.clicked.connect(self.ack)
         self._retry.clicked.connect(self.retry)
+        self._reinit.clicked.connect(self.reinit)
 
         self._fades = [Fade(btn, duration=ACTION_BTN_FADE_MS) for btn in self._buttons]
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def set_permissions(self, *, pause: bool, resume: bool, stop: bool, ack: bool, retry: bool) -> None:
+    def set_permissions(self, *, pause: bool, resume: bool, stop: bool, ack: bool, retry: bool, reinit: bool) -> None:
         """Enable or disable each button for the current FSM state."""
         self._pause.setEnabled(pause)
         self._resume.setEnabled(resume)
         self._estop.setEnabled(stop)
         self._ack.setEnabled(ack)
         self._retry.setEnabled(retry)
+        self._reinit.setEnabled(reinit)
 
     def fade_in(self) -> None:
         """Fade all buttons in — on connection established."""

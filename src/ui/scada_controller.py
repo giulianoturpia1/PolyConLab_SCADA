@@ -59,6 +59,7 @@ class ScadaController(QObject):
         self._scada_state = ScadaState.DISCONNECTED
         self._host = ""
         self._port = 0
+        self._faulted: set[Sensor] = set()  # sensors that failed the init probe
 
         # ── Connection lifecycle ────────────────────────────────────────────────
         self._plc.connecting.connect(self._on_tcp_connecting)
@@ -68,6 +69,9 @@ class ScadaController(QObject):
 
         # ── State polling ───────────────────────────────────────────────────────
         self._plc.state_received.connect(self._on_state_polled)
+
+        # ── Per-sensor re-init results (the PLC's reply to a SYST:REINIT command).
+        self._plc.sensor_reinit_result.connect(self._on_sensor_reinit_result)
 
         # ── Init sequence ───────────────────────────────────────────────────────
         self._init_seq.progress.connect(self.log)
@@ -80,6 +84,7 @@ class ScadaController(QObject):
         self._recovery_bar.stop.connect(self._on_stop)
         self._recovery_bar.ack.connect(self._on_ack)
         self._recovery_bar.retry.connect(self._on_retry)
+        self._recovery_bar.reinit.connect(self._on_reinit)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -134,7 +139,10 @@ class ScadaController(QObject):
     def _on_init_sensor_result(self, sensor: Sensor, ok: bool) -> None:
         """Mark a probed sensor's card and log the failing ones."""
         self._sensor_panel.mark_init_fault(sensor, ok)
-        if not ok:
+        if ok:
+            self._faulted.discard(sensor)
+        else:
+            self._faulted.add(sensor)
             self.log.emit(f"  Sensor con fallo: {self._sensor_panel.card_title(sensor)}")
 
     def _on_init_finished(self, success: bool, msg: str) -> None:
@@ -196,13 +204,41 @@ class ScadaController(QObject):
         the PLC reaches MANUAL even if some sensors are permanently offline.
         """
         self._sensor_panel.clear_faults()
+        self._faulted.clear()
         self._init_seq.force_proceed()
 
     def _on_retry(self) -> None:
         """Request a full sensor re-probe and re-run the init handshake."""
         self._plc.send_event(Evt.RETRY_CHECKUP)
         self._sensor_panel.clear_faults()
+        self._faulted.clear()
         self._init_seq.restart()
+
+    def _on_reinit(self) -> None:
+        """Re-initialise every currently faulted sensor on the PLC. No state Change occurs.
+
+        Fires one SYST:REINIT command per faulted sensor over a snapshot of the
+        set (the results mutate it as they arrive).  Re-init is a command, not a
+        state event: cards clear as sensors recover, but the PLC stays in SOFT
+        ERROR — the operator then uses Reintentar Chequeo or Aceptar Falla to
+        leave it.
+        """
+        if not self._faulted:
+            self.log.emit("No hay sensores en falla para reinicializar.")
+            return
+        for sensor in sorted(self._faulted, key=lambda s: s.value):
+            self.log.emit(f"Reinicializando sensor: {self._sensor_panel.card_title(sensor)}...")
+            self._plc.reinit_sensor(sensor)
+
+    def _on_sensor_reinit_result(self, sensor: Sensor, ok: bool) -> None:
+        """Clear the card and drop the sensor on success; keep the fault and log on failure."""
+        title = self._sensor_panel.card_title(sensor)
+        if ok:
+            self._faulted.discard(sensor)
+            self._sensor_panel.clear_fault(sensor)
+            self.log.emit(f"  Sensor reinicializado: {title}")
+        else:
+            self.log.emit(f"  Falló la reinicialización: {title}")
 
     # ── State machine ─────────────────────────────────────────────────────────────
 
@@ -238,10 +274,11 @@ class ScadaController(QObject):
         self._sensor_panel.set_polling_allowed(c.sensors)
         self._actuator_panel.set_enabled(c.actuators)
         self._temp_control.set_enabled(c.actuators)
-        self._recovery_bar.set_permissions(pause=c.pause, resume=c.resume, stop=c.stop, ack=c.ack, retry=c.retry)
+        self._recovery_bar.set_permissions(pause=c.pause, resume=c.resume, stop=c.stop, ack=c.ack, retry=c.retry, reinit=c.reinit)
 
     def _reset(self) -> None:
         """Reset all connection-dependent state and view to the disconnected baseline."""
+        self._faulted.clear()
         self._state_label.reset()
         self._transition(ScadaState.DISCONNECTED)
         self._sensor_panel.reset()

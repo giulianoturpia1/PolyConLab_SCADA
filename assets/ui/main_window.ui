@@ -303,6 +303,14 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
 Úselo si un sensor no respondió durante el inicio.</string></property>
               </widget>
              </item>
+             <item>
+              <widget class="QPushButton" name="btn_reinit">
+               <property name="text"><string>Reinicializar Sensores</string></property>
+               <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Reintenta la inicialización de hardware de cada sensor en falla, sin reiniciar el PLC.
+Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Falla para salir de la falla.</string></property>
+              </widget>
+             </item>
             </layout>
            </widget>
           </item>
