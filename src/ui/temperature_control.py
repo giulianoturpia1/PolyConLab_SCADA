@@ -1,11 +1,9 @@
 """TemperatureControl — owns the manual temperature-setpoint controls.
 
 Wraps the promoted slider / spinbox / toggle button and the send logic for the
-``TEMP:SET:IN`` command. The firmware handles that command as a local toggle in
-ManualState and returns no positive confirmation, so this control cannot verify
-the PLC's true state: the button reflects only the last request made while in
-MANUAL, and is force-cleared (:meth:`clear`) whenever the PLC leaves MANUAL or
-the link drops. A PLC-driven indicator would need an FW readback (TEMP:CTRL?).
+``TEMP:SET:IN`` command. Synchronizes the button indicator with the PLC's actual
+heater state via the ``actuator_changed`` signal, and clears it when leaving
+MANUAL or the link drops.
 """
 
 from __future__ import annotations
@@ -15,6 +13,7 @@ from PySide6.QtWidgets import QAbstractButton, QAbstractSlider, QSpinBox
 
 from comms.plc_client import PlcClient
 from comms.protocol import Cmd
+from models import Device
 from ui.style import palette as col
 
 # Corner rounding for the toggle button, in px.
@@ -47,9 +46,11 @@ class TemperatureControl(QObject):
         self._spinbox = spinbox
         self._slider = slider
         self._plc = plc
-        self._requested = False  # last request made in MANUAL — not verified PLC state
+        self._requested = False  # current state of the heater (from PLC)
 
         self._button.clicked.connect(self._on_clicked)
+        # Listen to the PLC's actual heater state to keep the indicator in sync.
+        self._plc.actuator_changed.connect(self._on_actuator_changed)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -69,11 +70,16 @@ class TemperatureControl(QObject):
         value = self._spinbox.value()
         line = Cmd.temp_set_in(value)
         if self._plc.send_raw(line):
-            self._set_requested(not self._requested)
-            status = "ACTIVADO" if self._requested else "DESACTIVADO"
+            # Toggle is sent to the PLC; state will update via actuator_changed signal.
+            status = "ACTIVADO" if not self._requested else "DESACTIVADO"
             self.log.emit(f"Control de temperatura {status}: {line}")
         else:
             self.log.emit("No conectado — comando de temperatura no enviado.")
+
+    def _on_actuator_changed(self, device: Device, on: bool) -> None:
+        """Update the indicator when the PLC's heater state changes."""
+        if device == Device.HEATER:
+            self._set_requested(on)
 
     def _set_requested(self, requested: bool) -> None:
         self._requested = requested
