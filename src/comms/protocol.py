@@ -143,6 +143,18 @@ class Resp:
     OK = "OK"  # positive reply to a SYST:REINIT command
 
 
+class State:
+    """Canonical FSM state names as the PLC reports them in a STATE? reply."""
+
+    STARTUP = "STARTUP"
+    CHECKUP = "CHECKUP"
+    MANUAL = "MANUAL"
+    PAUSE = "PAUSE"
+    SOFT_ERROR = "SOFT ERROR"
+    HARD_ERROR = "HARD ERROR"
+    SHUTDOWN = "SHUTDOWN"
+
+
 @dataclass(frozen=True)
 class ActuatorSpec:
     """Wire strings for one actuator: the on/off commands and their confirmation replies."""

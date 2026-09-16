@@ -5,6 +5,8 @@ Import as:  from ui.style import palette as col
 
 from __future__ import annotations
 
+from comms.protocol import State
+
 # ── Base colours ─────────────────────────────────────────────────────────────
 BG = "#1E2127"
 PANEL = "#282C34"
@@ -34,11 +36,11 @@ ACTIVE_HOVER = GREEN_HOVER
 
 # ── State-label colours ───────────────────────────────────────────────────────
 STATE_COLOR: dict[str, str] = {
-    "STARTUP": BLUE,
-    "CHECKUP": ORANGE,
-    "MANUAL": GREEN,
-    "PAUSE": ORANGE,
-    "SOFT ERROR": AMBER,
-    "HARD ERROR": RED,
-    "SHUTDOWN": GRAY,
+    State.STARTUP: BLUE,
+    State.CHECKUP: ORANGE,
+    State.MANUAL: GREEN,
+    State.PAUSE: ORANGE,
+    State.SOFT_ERROR: AMBER,
+    State.HARD_ERROR: RED,
+    State.SHUTDOWN: GRAY,
 }

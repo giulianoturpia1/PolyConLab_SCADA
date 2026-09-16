@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
+from comms.protocol import State
+
 
 class ScadaState(Enum):
     DISCONNECTED = auto()
@@ -47,13 +49,13 @@ STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
 }
 
 _PLC_MAP: dict[str, ScadaState] = {
-    "STARTUP":    ScadaState.STARTUP,
-    "CHECKUP":    ScadaState.CHECKUP,
-    "MANUAL":     ScadaState.MANUAL,
-    "PAUSE":      ScadaState.PAUSE,
-    "SOFT ERROR": ScadaState.SOFT_ERROR,
-    "HARD ERROR": ScadaState.HARD_ERROR,
-    "SHUTDOWN":   ScadaState.SHUTDOWN,
+    State.STARTUP:    ScadaState.STARTUP,
+    State.CHECKUP:    ScadaState.CHECKUP,
+    State.MANUAL:     ScadaState.MANUAL,
+    State.PAUSE:      ScadaState.PAUSE,
+    State.SOFT_ERROR: ScadaState.SOFT_ERROR,
+    State.HARD_ERROR: ScadaState.HARD_ERROR,
+    State.SHUTDOWN:   ScadaState.SHUTDOWN,
 }
 
 
