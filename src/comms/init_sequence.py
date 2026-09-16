@@ -242,7 +242,15 @@ class InitSequence(QObject):
         self._finish(False, "Tiempo de espera agotado verificando sensores.")
 
     def _on_probe_done(self, results: dict[Sensor, bool]) -> None:
-        """Evaluate sensor probe results and complete the handshake accordingly."""
+        """Evaluate sensor probe results and complete the handshake accordingly.
+
+        Replies that arrive after the probe timed out belong to a sequence that
+        already finished; acting on them would send the OK events and emit a
+        second ``finished`` for a run the controller has moved on from.
+        """
+        if not self._running:
+            return
+
         self._probe_timer.stop()
 
         for sensor, ok in results.items():
