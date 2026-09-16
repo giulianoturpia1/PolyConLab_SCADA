@@ -23,6 +23,17 @@ from ui.sensor_panel import SensorPanel
 from ui.temperature_control import TemperatureControl
 from ui.widgets.state_label import StateLabel
 
+# What to tell the operator when the PLC leaves PAUSE.  Resuming returns to
+# MANUAL only if the pause interrupted MANUAL; any other pause resumes into
+# CHECKUP, where the sensors are re-verified before actuators are re-enabled.
+_RESUME_MESSAGE: dict[ScadaState, str] = {
+    ScadaState.MANUAL: "Sistema reanudado en MANUAL.",
+    ScadaState.CHECKUP: (
+        "La pausa no provino de MANUAL: el PLC vuelve a CHEQUEO y se re-verifican "
+        "los sensores antes de habilitar los actuadores."
+    ),
+}
+
 
 class ScadaController(QObject):
     """Coordinates the PLC session and the view: lifecycle, FSM, gating, reconciliation."""
@@ -165,13 +176,18 @@ class ScadaController(QObject):
     def _on_state_polled(self, raw: str) -> None:
         """Handle a STATE? reply from the init sequence or the periodic poll.
 
-        If the PLC is in CHECKUP and no handshake is in progress, start one
-        automatically (e.g. an ACK FAULT that returned to CHECKUP, or any
-        unexpected CHECKUP re-entry).
+        Explains a resume in the log — the PLC may also unpause on its own when
+        the link comes back, so the operator sees why the state moved even
+        without pressing anything.  If the PLC is in CHECKUP and no handshake is
+        in progress, start one automatically (e.g. an ACK FAULT that returned to
+        CHECKUP, or any unexpected CHECKUP re-entry).
         """
         self._state_label.set_state(raw)
         plc_state = from_plc(raw)
+        previous = self._scada_state
         self._transition(plc_state)
+        if previous == ScadaState.PAUSE and plc_state != ScadaState.PAUSE:
+            self.log.emit(_RESUME_MESSAGE.get(plc_state, f"El PLC salió de PAUSE al estado «{raw}»."))
         if plc_state == ScadaState.CHECKUP and not self._init_seq.is_running:
             self._init_seq.restart()
 
@@ -181,6 +197,7 @@ class ScadaController(QObject):
         self._plc.send_event(Evt.PAUSE)
 
     def _on_resume(self) -> None:
+        self.log.emit("Reanudando el sistema...")
         self._plc.send_event(Evt.UNPAUSE)
 
     def _on_stop(self) -> None:
