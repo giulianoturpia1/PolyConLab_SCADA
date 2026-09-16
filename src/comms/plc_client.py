@@ -273,6 +273,10 @@ class PlcClient(QObject):
             head = self._pending[0]
             if head.resolve(line):
                 self._pending.popleft()
+                if not self._pending:
+                    # Nothing outstanding: re-assert the invariant so a dropped
+                    # poll reply cannot stall _poll_sensors forever.
+                    self._polls_outstanding = 0
                 if not head.quiet:
                     self.line_received.emit(line)
                 return
@@ -306,13 +310,18 @@ class PlcClient(QObject):
     def _resolve_actuator_state(self, dev: Device, line: str) -> bool:
         """Resolve a state query response and emit the actual state.
 
-        Maps ON/OPEN to True, OFF/CLOSED to False. Ignores errors and unknown responses.
+        Maps ON/OPEN to True, OFF/CLOSED to False.  An error reply is consumed
+        without touching the indicator — the SCADA never assumes a state the PLC
+        did not report, and the next poll re-asks.  Consuming it is what keeps
+        the FIFO correlator from jamming on its head entry.
         """
         if line in (Resp.ON, Resp.OPEN):
             self.actuator_changed.emit(dev, True)
             return True
         if line in (Resp.OFF, Resp.CLOSED):
             self.actuator_changed.emit(dev, False)
+            return True
+        if is_error(line):
             return True
         return False
 
