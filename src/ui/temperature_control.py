@@ -51,6 +51,8 @@ class TemperatureControl(QObject):
         self._button.clicked.connect(self._on_clicked)
         # Listen to the PLC's actual heater state to keep the indicator in sync.
         self._plc.actuator_changed.connect(self._on_actuator_changed)
+        # The PLC confirms each toggle with the control state it settled on.
+        self._plc.temp_control_changed.connect(self._on_temp_control_changed)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -68,13 +70,16 @@ class TemperatureControl(QObject):
 
     def _on_clicked(self) -> None:
         value = self._spinbox.value()
-        line = Cmd.temp_set_in(value)
-        if self._plc.send_raw(line):
-            # Toggle is sent to the PLC; state will update via actuator_changed signal.
-            status = "ACTIVADO" if not self._requested else "DESACTIVADO"
-            self.log.emit(f"Control de temperatura {status}: {line}")
+        if self._plc.set_temperature_control(value):
+            # The indicator is not moved here: it follows the PLC, either through the heater state
+            # or through the confirmation this command gets back.
+            self.log.emit(f"Control de temperatura solicitado: {Cmd.temp_set_in(value)}")
         else:
             self.log.emit("No conectado — comando de temperatura no enviado.")
+
+    def _on_temp_control_changed(self, on: bool) -> None:
+        """Log the control state the PLC reported after a toggle."""
+        self.log.emit(f"Control de temperatura {'ACTIVADO' if on else 'DESACTIVADO'} (confirmado por el PLC).")
 
     def _on_actuator_changed(self, device: Device, on: bool) -> None:
         """Update the indicator when the PLC's heater state changes."""

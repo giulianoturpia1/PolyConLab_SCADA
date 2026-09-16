@@ -53,6 +53,7 @@ class PlcClient(QObject):
     sensor_updated = Signal(object, str)  # (Sensor, value) — fresh reading as a display string
     sensor_fault = Signal(object)  # (Sensor) — sensor reply was an error
     sensor_reinit_result = Signal(object, bool)  # (Sensor, ok) — reply to a SYST:REINIT command
+    temp_control_changed = Signal(bool)  # (on) — PLC's control state after a TEMP:SET:IN toggle
 
     # Diagnostic / init events.
     state_received = Signal(str)  # reply to a STATE? query — carries the raw state name string
@@ -185,6 +186,18 @@ class PlcClient(QObject):
         self._pending.append(_Pending(partial(self._resolve_reinit, sensor)))
         return True
 
+    def set_temperature_control(self, value: float) -> bool:
+        """Send the inlet setpoint, which the PLC treats as a toggle, and correlate its reply.
+
+        The PLC answers with the resulting control state (ON/OFF), so the command needs a resolver
+        like any other — an unclaimed reply would otherwise be offered to whatever command happens
+        to be at the head of the queue.
+        """
+        if not self._send_line(Cmd.temp_set_in(value)):
+            return False
+        self._pending.append(_Pending(self._resolve_temp_control))
+        return True
+
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
         """Query every sensor once and report pass/fail per sensor via *on_done*.
 
@@ -294,6 +307,18 @@ class PlcClient(QObject):
             return True
         if is_error(line):
             self.sensor_reinit_result.emit(sensor, False)
+            return True
+        return False
+
+    def _resolve_temp_control(self, line: str) -> bool:
+        """Report the control state the PLC settled on; consume an error without reporting one."""
+        if line == Resp.ON:
+            self.temp_control_changed.emit(True)
+            return True
+        if line == Resp.OFF:
+            self.temp_control_changed.emit(False)
+            return True
+        if is_error(line):
             return True
         return False
 

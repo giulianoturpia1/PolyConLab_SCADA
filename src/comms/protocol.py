@@ -60,8 +60,8 @@ class Cmd:
     REINIT_LEVEL = "SYST:REINIT:LEVEL"
 
     # Temperature control (manual inlet setpoint). The FW handles TEMP:SET:IN as a
-    # LOCAL TOGGLE in ManualState and sends no positive confirmation, so the SCADA
-    # cannot treat it as a state-authoritative command (see MainWindow).
+    # LOCAL TOGGLE in ManualState and answers with the resulting control state
+    # (ON / OFF), so the reply must be correlated like any other command.
     TEMP_SET_IN = "TEMP:SET:IN"
 
     # Valves are parameterized by number, appended after a comma
