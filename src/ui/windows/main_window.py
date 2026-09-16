@@ -4,7 +4,7 @@ from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QMessageBox
 
-from comms.init_sequence import InitSequence
+from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
 from models import Device, Sensor
 from ui.actuator_panel import ActuatorPanel
@@ -54,7 +54,7 @@ class MainWindow(QMainWindow):
         self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
         self._plc = PlcClient(self)
-        self._init_seq = InitSequence(self._plc, self)
+        self._init_seq = PlcHandshake(self._plc, self)
 
         self._configure_widgets()
 
