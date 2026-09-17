@@ -12,7 +12,7 @@ These have a Python class in `src/ui/widgets/`. Layout changes go in Qt Designer
 |---|---|---|---|
 | `card_tin` | `SensorCard` | `sensor_card.py` | T. Entrada reading tile |
 | `card_tout` | `SensorCard` | `sensor_card.py` | T. Salida reading tile |
-| `card_tcam` | `SensorCard` | `sensor_card.py` | T. Cámara reading tile |
+| `card_tcam` | `SensorCard` | `sensor_card.py` | T. Camisa reading tile |
 | `card_tmez` | `SensorCard` | `sensor_card.py` | T. Mezcla reading tile |
 | `card_flow` | `SensorCard` | `sensor_card.py` | Caudal reading tile |
 | `card_lvl` | `SensorCard` | `sensor_card.py` | Nivel reading tile |

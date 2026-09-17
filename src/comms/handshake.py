@@ -42,7 +42,7 @@ _PROBE_TIMEOUT_MS = 6_000
 _SENSOR_LABEL: dict[Sensor, str] = {
     Sensor.TEMP_IN: "T. Entrada",
     Sensor.TEMP_OUT: "T. Salida",
-    Sensor.TEMP_BATH: "T. Cámara",
+    Sensor.TEMP_BATH: "T. Camisa",
     Sensor.TEMP_MIX: "T. Mezcla",
     Sensor.FLOW: "Caudal",
     Sensor.LEVEL: "Nivel",

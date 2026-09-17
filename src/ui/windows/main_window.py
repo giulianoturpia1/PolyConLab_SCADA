@@ -9,6 +9,7 @@ from comms.plc_client import PlcClient
 from models import Device, Sensor
 from ui.actuator_panel import ActuatorPanel
 from ui.main_window_ui import Ui_MainWindow
+from ui.measurement_log import MeasurementLog
 from ui.recovery_action_bar import RecoveryActionBar
 from ui.scada_controller import ScadaController
 from ui.sensor_panel import SensorPanel
@@ -55,12 +56,15 @@ class MainWindow(QMainWindow):
         self._log_win = LogWindow(self)
         self._plc = PlcClient(self)
         self._init_seq = PlcHandshake(self._plc, self)
+        # Constructed before SensorPanel so the log is already listening to PLC status
+        # signals by the time SensorPanel starts feeding it recorded measurements.
+        self._log = MeasurementLog(self._plc, self)
 
         self._configure_widgets()
 
         # Panels are created after _configure_widgets so their reference dicts and
         # the chart are fully set up before each panel wires its own signals.
-        self._sensor_panel = SensorPanel(self._cards, self._chart, self._plc, self)
+        self._sensor_panel = SensorPanel(self._cards, self._chart, self._log, self._plc, self)
         self._actuator_panel = ActuatorPanel(self._rows, self._plc, self)
         self._temp_control = TemperatureControl(
             self._ui.btn_temp_control, self._ui.heater_spinbox, self._ui.heater_slider, self._plc, self
@@ -91,7 +95,7 @@ class MainWindow(QMainWindow):
         """Set labels on promoted widgets and build the reference dicts for the panels."""
         self._ui.card_tin.configure("T. Entrada", "°C")
         self._ui.card_tout.configure("T. Salida", "°C")
-        self._ui.card_tcam.configure("T. Cámara", "°C")
+        self._ui.card_tcam.configure("T. Camisa", "°C")
         self._ui.card_tmez.configure("T. Mezcla", "°C")
         self._ui.card_flow.configure("Caudal", "L/min")
         self._ui.card_lvl.configure("Nivel", "")
@@ -230,7 +234,7 @@ class MainWindow(QMainWindow):
         if not file_path:
             return
 
-        if self._chart.export_history(file_path, limit=limit):
+        if self._log.export_csv(file_path, limit=limit):
             self.log(f"Datos descargados en {file_path} ({limit} filas).")
         else:
             QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")

@@ -19,7 +19,7 @@ from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, pars
 from models import Device, Sensor
 from network.tcp_client import TcpClient
 
-_POLL_INTERVAL_MS = 1_000  # sensor read cadence
+POLL_INTERVAL_MS = 1_000  # sensor read cadence
 _STATE_POLL_INTERVAL_MS = 2_000  # FSM state label refresh cadence
 
 # How long (ms) a command may sit at the head of the reply queue before it is dropped. The firmware
@@ -78,7 +78,7 @@ class PlcClient(QObject):
         self._enabled_sensors: set[Sensor] = set()
 
         self._poll_timer = QTimer(self)
-        self._poll_timer.setInterval(_POLL_INTERVAL_MS)
+        self._poll_timer.setInterval(POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_sensors)
 
         # Periodic STATE? poll — started by the owner (MainWindow) after the init
