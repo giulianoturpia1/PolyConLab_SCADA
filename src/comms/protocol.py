@@ -35,6 +35,11 @@ class Cmd:
     CHILL_OFF = "OUTP:CHILL OFF"
     CHILL_STATE = "OUTP:CHILL?"
 
+    # Mixer / emulsifier
+    MIX_ON = "OUTP:MIX ON"
+    MIX_OFF = "OUTP:MIX OFF"
+    MIX_STATE = "OUTP:MIX?"
+
     # Sensor reads
     TEMP_IN = "MEAS:TEMP:IN?"
     TEMP_OUT = "MEAS:TEMP:OUT?"
@@ -171,6 +176,7 @@ ACTUATORS: dict[Device, ActuatorSpec] = {
     Device.HEATER: ActuatorSpec(Cmd.HEAT_ON, Cmd.HEAT_OFF, Resp.ON, Resp.OFF),
     Device.PUMP: ActuatorSpec(Cmd.PUMP_ON, Cmd.PUMP_OFF, Resp.ON, Resp.OFF),
     Device.CHILLER: ActuatorSpec(Cmd.CHILL_ON, Cmd.CHILL_OFF, Resp.ON, Resp.OFF),
+    Device.MIXER: ActuatorSpec(Cmd.MIX_ON, Cmd.MIX_OFF, Resp.ON, Resp.OFF),
     Device.VALVE1: ActuatorSpec(Cmd.valve_open(1), Cmd.valve_close(1), Resp.OPEN, Resp.CLOSED),
     Device.VALVE2: ActuatorSpec(Cmd.valve_open(2), Cmd.valve_close(2), Resp.OPEN, Resp.CLOSED),
 }
