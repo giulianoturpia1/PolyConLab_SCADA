@@ -47,20 +47,26 @@ _CSV_HEADER = [
     "Válvula 1",
     "Válvula 2",
     "Control Temp",
+    "Mezclador",
 ]
 
 # Per-device (on-word, off-word) pair used to render its confirmed boolean status.
-# Heater/pump/chiller report ON/OFF; the valves report OPEN/CLOSED.
+# Heater/pump/chiller/mixer report ON/OFF; the valves report OPEN/CLOSED.
 _DEVICE_ON_OFF: dict[Device, tuple[str, str]] = {
     Device.HEATER: (Resp.ON, Resp.OFF),
     Device.PUMP: (Resp.ON, Resp.OFF),
     Device.CHILLER: (Resp.ON, Resp.OFF),
+    Device.MIXER: (Resp.ON, Resp.OFF),
     Device.VALVE1: (Resp.OPEN, Resp.CLOSED),
     Device.VALVE2: (Resp.OPEN, Resp.CLOSED),
 }
 
 # Device columns, in CSV column order (Calefactor, Bomba, Enfriador, Válvula 1, Válvula 2).
 _DEVICE_COLUMNS = (Device.HEATER, Device.PUMP, Device.CHILLER, Device.VALVE1, Device.VALVE2)
+
+# Device columns written after "Control Temp" (Mezclador). Devices added after the CSV
+# layout was published go here, on the right, so existing columns keep their position.
+_TRAILING_DEVICE_COLUMNS = (Device.MIXER,)
 
 
 class MeasurementLog(QObject):
@@ -169,10 +175,18 @@ class MeasurementLog(QObject):
             self._format_temp(row["T. Mezcla"]),
             row["state"] or "",
         ]
-        for dev in _DEVICE_COLUMNS:
-            on_word, off_word = _DEVICE_ON_OFF[dev]
-            cells.append(self._format_bool(actuators.get(dev), on_word, off_word))
+        cells.extend(self._format_devices(actuators, _DEVICE_COLUMNS))
         cells.append(self._format_bool(row["temp_control"], Resp.ON, Resp.OFF))
+        cells.extend(self._format_devices(actuators, _TRAILING_DEVICE_COLUMNS))
+        return cells
+
+    @classmethod
+    def _format_devices(cls, actuators: dict[Device, bool | None], devices: tuple[Device, ...]) -> list[str]:
+        """Render the confirmed status of each device in *devices*, in order."""
+        cells = []
+        for dev in devices:
+            on_word, off_word = _DEVICE_ON_OFF[dev]
+            cells.append(cls._format_bool(actuators.get(dev), on_word, off_word))
         return cells
 
     @staticmethod
