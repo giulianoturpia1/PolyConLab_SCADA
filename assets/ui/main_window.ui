@@ -527,12 +527,6 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
              <item>
               <widget class="ActuatorRow" name="row_mixer"/>
              </item>
-             <item>
-              <spacer name="vsp_ctrl">
-               <property name="orientation"><enum>Qt::Vertical</enum></property>
-               <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-              </spacer>
-             </item>
             </layout>
            </widget>
           </item>
