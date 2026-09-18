@@ -489,7 +489,7 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_chiller"/>
+              <widget class="ActuatorRow" name="row_valve1"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act3">
@@ -501,7 +501,7 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_valve1"/>
+              <widget class="ActuatorRow" name="row_valve2"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act4">
@@ -513,13 +513,19 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_valve2"/>
+              <widget class="ActuatorRow" name="row_chiller"/>
              </item>
              <item>
-              <spacer name="vsp_ctrl">
-               <property name="orientation"><enum>Qt::Vertical</enum></property>
-               <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-              </spacer>
+              <widget class="QFrame" name="sep_act5">
+               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
+               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
+               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
+               <property name="frameShape"><enum>QFrame::HLine</enum></property>
+               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="ActuatorRow" name="row_mixer"/>
              </item>
             </layout>
            </widget>

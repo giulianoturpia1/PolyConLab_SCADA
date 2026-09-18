@@ -13,14 +13,19 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, parse_value
 from models import Device, Sensor
 from network.tcp_client import TcpClient
 
-_POLL_INTERVAL_MS = 1_000  # sensor read cadence
+POLL_INTERVAL_MS = 1_000  # sensor read cadence
 _STATE_POLL_INTERVAL_MS = 2_000  # FSM state label refresh cadence
+
+# How long (ms) a command may sit at the head of the reply queue before it is dropped. The firmware
+# answers every command it accepts, so this only fires when a reply is lost on the wire; without it
+# one lost reply would stall the correlator for the rest of the session.
+_PENDING_TTL_MS = 5_000
 
 
 @dataclass
@@ -34,6 +39,8 @@ class _Pending:
 
     resolve: Callable[[str], bool]
     quiet: bool = field(default=False)
+    deadline_ms: int = field(default=0)
+    is_poll: bool = field(default=False)  # counted in _polls_outstanding, so a drop must uncount it
 
 
 class PlcClient(QObject):
@@ -53,6 +60,7 @@ class PlcClient(QObject):
     sensor_updated = Signal(object, str)  # (Sensor, value) — fresh reading as a display string
     sensor_fault = Signal(object)  # (Sensor) — sensor reply was an error
     sensor_reinit_result = Signal(object, bool)  # (Sensor, ok) — reply to a SYST:REINIT command
+    temp_control_changed = Signal(bool)  # (on) — PLC's control state after a TEMP:SET:IN toggle
 
     # Diagnostic / init events.
     state_received = Signal(str)  # reply to a STATE? query — carries the raw state name string
@@ -70,7 +78,7 @@ class PlcClient(QObject):
         self._enabled_sensors: set[Sensor] = set()
 
         self._poll_timer = QTimer(self)
-        self._poll_timer.setInterval(_POLL_INTERVAL_MS)
+        self._poll_timer.setInterval(POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_sensors)
 
         # Periodic STATE? poll — started by the owner (MainWindow) after the init
@@ -123,7 +131,7 @@ class PlcClient(QObject):
         if not self._send_line(spec.on_cmd if on else spec.off_cmd):
             return
         expected = spec.on_resp if on else spec.off_resp
-        self._pending.append(_Pending(partial(self._resolve_actuator, dev, on, expected)))
+        self._queue_pending(partial(self._resolve_actuator, dev, on, expected))
 
     def send_event(self, evt: str) -> bool:
         """Send a state-machine event line (``EVT:…``). Returns False if not connected."""
@@ -149,7 +157,7 @@ class PlcClient(QObject):
         """
         if not self._send_line(Cmd.STATE, quiet=True):
             return False
-        self._pending.append(_Pending(self._resolve_state, quiet=True))
+        self._queue_pending(self._resolve_state, quiet=True)
         return True
 
     def query_all_actuator_states(self) -> bool:
@@ -164,13 +172,14 @@ class PlcClient(QObject):
             (Device.HEATER, Cmd.HEAT_STATE),
             (Device.PUMP, Cmd.PUMP_STATE),
             (Device.CHILLER, Cmd.CHILL_STATE),
+            (Device.MIXER, Cmd.MIX_STATE),
             (Device.VALVE1, Cmd.valve_state(1)),
             (Device.VALVE2, Cmd.valve_state(2)),
         ]
 
         for dev, query in queries:
             if self._send_line(query, quiet=True):
-                self._pending.append(_Pending(partial(self._resolve_actuator_state, dev), quiet=True))
+                self._queue_pending(partial(self._resolve_actuator_state, dev), quiet=True)
 
         return True
 
@@ -182,7 +191,19 @@ class PlcClient(QObject):
         """
         if not self._send_line(REINIT[sensor]):
             return False
-        self._pending.append(_Pending(partial(self._resolve_reinit, sensor)))
+        self._queue_pending(partial(self._resolve_reinit, sensor))
+        return True
+
+    def set_temperature_control(self, value: float) -> bool:
+        """Send the inlet setpoint, which the PLC treats as a toggle, and correlate its reply.
+
+        The PLC answers with the resulting control state (ON/OFF), so the command needs a resolver
+        like any other — an unclaimed reply would otherwise be offered to whatever command happens
+        to be at the head of the queue.
+        """
+        if not self._send_line(Cmd.temp_set_in(value)):
+            return False
+        self._queue_pending(self._resolve_temp_control)
         return True
 
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
@@ -216,7 +237,7 @@ class PlcClient(QObject):
 
                 return resolve
 
-            self._pending.append(_Pending(make_resolver(sensor), quiet=True))
+            self._queue_pending(make_resolver(sensor), quiet=True)
             pending_count[0] += 1
 
         return pending_count[0] > 0
@@ -228,6 +249,11 @@ class PlcClient(QObject):
     def stop_state_polling(self) -> None:
         """Stop the periodic STATE? poll."""
         self._state_poll_timer.stop()
+
+    def _queue_pending(self, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> None:
+        """Queue a resolver for the next reply, with the deadline after which it is abandoned."""
+        deadline = int(QDateTime.currentMSecsSinceEpoch()) + _PENDING_TTL_MS
+        self._pending.append(_Pending(resolve, quiet, deadline, is_poll))
 
     # ── Internals: sending ─────────────────────────────────────────────────────
 
@@ -248,7 +274,7 @@ class PlcClient(QObject):
             if sensor not in self._enabled_sensors:
                 continue
             if self._send_line(query, quiet=True):
-                self._pending.append(_Pending(partial(self._resolve_sensor, sensor), quiet=True))
+                self._queue_pending(partial(self._resolve_sensor, sensor), quiet=True, is_poll=True)
                 self._polls_outstanding += 1
 
     # ── Internals: receiving ────────────────────────────────────────────────────
@@ -269,6 +295,17 @@ class PlcClient(QObject):
         that command; otherwise the line is left for listeners (e.g. log-terminal
         queries) without disturbing the queue. Poll replies are resolved quietly.
         """
+        now = int(QDateTime.currentMSecsSinceEpoch())
+        while self._pending and self._pending[0].deadline_ms <= now:
+            # A reply was lost: abandoning the entry keeps the queue moving instead of letting every
+            # later reply be offered to a resolver that will never match. A dropped poll must also be
+            # uncounted, or _poll_sensors would skip every round from here on.
+            dropped = self._pending.popleft()
+            if dropped.is_poll and self._polls_outstanding > 0:
+                self._polls_outstanding -= 1
+            if not self._pending:
+                self._polls_outstanding = 0
+
         if self._pending:
             head = self._pending[0]
             if head.resolve(line):
@@ -294,6 +331,18 @@ class PlcClient(QObject):
             return True
         if is_error(line):
             self.sensor_reinit_result.emit(sensor, False)
+            return True
+        return False
+
+    def _resolve_temp_control(self, line: str) -> bool:
+        """Report the control state the PLC settled on; consume an error without reporting one."""
+        if line == Resp.ON:
+            self.temp_control_changed.emit(True)
+            return True
+        if line == Resp.OFF:
+            self.temp_control_changed.emit(False)
+            return True
+        if is_error(line):
             return True
         return False
 

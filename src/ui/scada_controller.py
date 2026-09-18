@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QObject, Signal
 
-from comms.init_sequence import InitSequence
+from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
 from comms.protocol import Evt
 from models import Sensor
@@ -50,7 +50,7 @@ class ScadaController(QObject):
     def __init__(
         self,
         plc: PlcClient,
-        init_seq: InitSequence,
+        init_seq: PlcHandshake,
         sensor_panel: SensorPanel,
         actuator_panel: ActuatorPanel,
         temp_control: TemperatureControl,
@@ -189,7 +189,9 @@ class ScadaController(QObject):
         if previous == ScadaState.PAUSE and plc_state != ScadaState.PAUSE:
             self.log.emit(_RESUME_MESSAGE.get(plc_state, f"El PLC salió de PAUSE al estado «{raw}»."))
         if plc_state == ScadaState.CHECKUP and not self._init_seq.is_running:
-            self._init_seq.restart()
+            # The controller only notices the drift back to CHECKUP; the handshake
+            # itself decides how to react.
+            self._init_seq.reprobe_sensors()
 
     # ── Recovery / runtime actions ────────────────────────────────────────────────
 
@@ -216,20 +218,19 @@ class ScadaController(QObject):
     def _on_ack(self) -> None:
         """Accept the fault and reach MANUAL without re-probing sensors.
 
-        :meth:`InitSequence.force_proceed` exits SOFT ERROR if necessary and
+        :meth:`PlcHandshake.skip_probe` exits SOFT ERROR if necessary and
         sends EVT:SCADA OK + EVT:SENSORS OK directly — bypassing the probe — so
         the PLC reaches MANUAL even if some sensors are permanently offline.
         """
         self._sensor_panel.clear_faults()
         self._faulted.clear()
-        self._init_seq.force_proceed()
+        self._init_seq.skip_probe()
 
     def _on_retry(self) -> None:
         """Request a full sensor re-probe and re-run the init handshake."""
-        self._plc.send_event(Evt.RETRY_CHECKUP)
         self._sensor_panel.clear_faults()
         self._faulted.clear()
-        self._init_seq.restart()
+        self._init_seq.reprobe_sensors()
 
     def _on_reinit(self) -> None:
         """Re-initialise every currently faulted sensor on the PLC. No state Change occurs.

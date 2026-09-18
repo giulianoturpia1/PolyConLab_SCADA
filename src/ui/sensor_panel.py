@@ -6,7 +6,7 @@ stays focused on connection lifecycle and FSM state management.
 Responsibilities owned here:
 * Per-sensor card value and fault display
 * Polling enable/disable (forwarded to :class:`~comms.plc_client.PlcClient`)
-* Chart series visibility and temperature-batch accumulation
+* Chart series visibility, temperature-batch accumulation and measurement-log recording
 * Init-probe fault marking and clearing
 * Full reset on disconnect
 """
@@ -18,6 +18,7 @@ from PySide6.QtCore import QObject
 from comms.plc_client import PlcClient
 from comms.protocol import parse_value
 from models import Sensor
+from ui.measurement_log import MeasurementLog
 from ui.style import palette as col
 from ui.widgets.sensor_card import SensorCard
 from ui.widgets.temperature_chart import TemperatureChart
@@ -27,7 +28,7 @@ _CHART_SENSORS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP
 
 
 class SensorPanel(QObject):
-    """Manages the six sensor cards and their temperature-chart integration.
+    """Manages the six sensor cards, their temperature-chart integration and measurement logging.
 
     Constructed after the card dict is built in ``_configure_widgets`` so the
     cards are fully labelled before signals are wired.
@@ -37,12 +38,14 @@ class SensorPanel(QObject):
         self,
         cards: dict[Sensor, SensorCard],
         chart: TemperatureChart,
+        log: MeasurementLog,
         plc: PlcClient,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
         self._cards = cards
         self._chart = chart
+        self._log = log
         self._plc = plc
 
         # Sensors currently plotted in the chart (user-selected subset).
@@ -194,5 +197,7 @@ class SensorPanel(QObject):
             # Every enabled chart sensor is faulted: nothing real to plot.
             self._temp_batch.clear()
             return
-        self._chart.push(*(self._temp_batch.get(s) for s in _CHART_SENSORS))
+        readings = tuple(self._temp_batch.get(s) for s in _CHART_SENSORS)
+        self._chart.push(*readings)
+        self._log.record(*readings)
         self._temp_batch.clear()

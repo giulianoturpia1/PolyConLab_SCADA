@@ -35,6 +35,11 @@ class Cmd:
     CHILL_OFF = "OUTP:CHILL OFF"
     CHILL_STATE = "OUTP:CHILL?"
 
+    # Mixer / emulsifier
+    MIX_ON = "OUTP:MIX ON"
+    MIX_OFF = "OUTP:MIX OFF"
+    MIX_STATE = "OUTP:MIX?"
+
     # Sensor reads
     TEMP_IN = "MEAS:TEMP:IN?"
     TEMP_OUT = "MEAS:TEMP:OUT?"
@@ -60,8 +65,8 @@ class Cmd:
     REINIT_LEVEL = "SYST:REINIT:LEVEL"
 
     # Temperature control (manual inlet setpoint). The FW handles TEMP:SET:IN as a
-    # LOCAL TOGGLE in ManualState and sends no positive confirmation, so the SCADA
-    # cannot treat it as a state-authoritative command (see MainWindow).
+    # LOCAL TOGGLE in ManualState and answers with the resulting control state
+    # (ON / OFF), so the reply must be correlated like any other command.
     TEMP_SET_IN = "TEMP:SET:IN"
 
     # Valves are parameterized by number, appended after a comma
@@ -143,6 +148,18 @@ class Resp:
     OK = "OK"  # positive reply to a SYST:REINIT command
 
 
+class State:
+    """Canonical FSM state names as the PLC reports them in a STATE? reply."""
+
+    STARTUP = "STARTUP"
+    CHECKUP = "CHECKUP"
+    MANUAL = "MANUAL"
+    PAUSE = "PAUSE"
+    SOFT_ERROR = "SOFT ERROR"
+    HARD_ERROR = "HARD ERROR"
+    SHUTDOWN = "SHUTDOWN"
+
+
 @dataclass(frozen=True)
 class ActuatorSpec:
     """Wire strings for one actuator: the on/off commands and their confirmation replies."""
@@ -159,6 +176,7 @@ ACTUATORS: dict[Device, ActuatorSpec] = {
     Device.HEATER: ActuatorSpec(Cmd.HEAT_ON, Cmd.HEAT_OFF, Resp.ON, Resp.OFF),
     Device.PUMP: ActuatorSpec(Cmd.PUMP_ON, Cmd.PUMP_OFF, Resp.ON, Resp.OFF),
     Device.CHILLER: ActuatorSpec(Cmd.CHILL_ON, Cmd.CHILL_OFF, Resp.ON, Resp.OFF),
+    Device.MIXER: ActuatorSpec(Cmd.MIX_ON, Cmd.MIX_OFF, Resp.ON, Resp.OFF),
     Device.VALVE1: ActuatorSpec(Cmd.valve_open(1), Cmd.valve_close(1), Resp.OPEN, Resp.CLOSED),
     Device.VALVE2: ActuatorSpec(Cmd.valve_open(2), Cmd.valve_close(2), Resp.OPEN, Resp.CLOSED),
 }
