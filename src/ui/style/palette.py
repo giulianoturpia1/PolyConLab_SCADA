@@ -27,6 +27,11 @@ GRAY_HOVER = "#6B7280"
 # Amber — warm orange used for the SOFT ERROR firmware state.
 AMBER = "#D19A66"
 
+# ── Semantic control roles ────────────────────────────────────────────────────
+# An ON / active control: the temp-control button and ON actuator rows.
+ACTIVE = GREEN
+ACTIVE_HOVER = GREEN_HOVER
+
 # ── State-label colours ───────────────────────────────────────────────────────
 STATE_COLOR: dict[str, str] = {
     "STARTUP": BLUE,

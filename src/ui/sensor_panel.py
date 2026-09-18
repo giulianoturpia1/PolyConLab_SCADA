@@ -49,6 +49,9 @@ class SensorPanel(QObject):
         self._enabled_chart_sensors: set[Sensor] = set()
         # Accumulates one reading per enabled chart sensor before pushing to the chart.
         self._temp_batch: dict[Sensor, float] = {}
+        # Enabled chart sensors currently in a fault state; excluded from the
+        # "all reported" gate so one faulty sensor cannot stall the whole chart.
+        self._faulted_chart_sensors: set[Sensor] = set()
 
         # Wire card toggled signals to poll enable/disable and chart visibility.
         for sensor, card in self._cards.items():
@@ -98,11 +101,24 @@ class SensorPanel(QObject):
         if not allowed:
             # Drop partial batch — new readings will rebuild it cleanly on resume.
             self._temp_batch.clear()
+            self._faulted_chart_sensors.clear()
 
     def mark_init_fault(self, sensor: Sensor, ok: bool) -> None:
         """Apply the init-probe fault indicator to *sensor*'s card if it failed."""
         if not ok:
             self._cards[sensor].set_fault(True)
+
+    def clear_fault(self, sensor: Sensor) -> None:
+        """Clear the init-probe fault indicator on a single card and blank its value.
+
+        ``SensorCard.set_fault(False)`` only reverts the border; the value label
+        keeps its ``"FALLO"`` text until the next poll, and re-init runs in SOFT
+        ERROR where polling is paused — so blank the value here to show the card
+        recovered.
+        """
+        card = self._cards[sensor]
+        card.set_fault(False)
+        card.set_value("--")
 
     def clear_faults(self) -> None:
         """Clear init-probe fault indicators on all cards."""
@@ -121,6 +137,7 @@ class SensorPanel(QObject):
         """
         self._enabled_chart_sensors.clear()
         self._temp_batch.clear()
+        self._faulted_chart_sensors.clear()
         self._chart.reset_visibility()
         for card in self._cards.values():
             card.set_value("--")
@@ -140,21 +157,42 @@ class SensorPanel(QObject):
                 self._enabled_chart_sensors.discard(sensor)
                 # Drop stale reading so the next batch does not mix old and new data.
                 self._temp_batch.pop(sensor, None)
+                self._faulted_chart_sensors.discard(sensor)
 
     def _on_sensor_updated(self, sensor: Sensor, value: str) -> None:
-        """Show a fresh reading on its card; push to the chart when all enabled sensors reported."""
+        """Show a fresh reading on its card; push to the chart once every enabled sensor has reported or faulted."""
         self._cards[sensor].set_value(value)
 
         temp = parse_value(value)
         if temp is not None and sensor in self._enabled_chart_sensors:
+            self._faulted_chart_sensors.discard(sensor)  # a reading means it recovered
             self._temp_batch[sensor] = temp
-            # Push only when every currently-enabled chart sensor has reported.
-            if all(s in self._temp_batch for s in self._enabled_chart_sensors):
-                # Disabled sensors are passed as None so the chart skips their series.
-                self._chart.push(*(self._temp_batch.get(s) for s in _CHART_SENSORS))
-                self._temp_batch.clear()
+            self._maybe_push_chart()
 
     def _on_sensor_fault(self, sensor: Sensor) -> None:
-        """Mark a card as ERR on a runtime poll fault; drop any partial batch."""
+        """Mark a card as ERR on a runtime poll fault; let the other series still flush."""
         self._cards[sensor].set_value("ERR", col.RED)
         self._temp_batch.pop(sensor, None)
+        if sensor in self._enabled_chart_sensors:
+            self._faulted_chart_sensors.add(sensor)
+            # A fault on the last-awaited sensor must not stall the healthy ones.
+            self._maybe_push_chart()
+
+    def _maybe_push_chart(self) -> None:
+        """Push one chart point once every enabled chart sensor has either reported or faulted.
+
+        Faulted sensors are passed to the chart as None (skipped series), so a
+        single failing sensor never freezes the others. A round with no real
+        readings at all is dropped rather than plotting an empty point.
+        """
+        active = self._enabled_chart_sensors
+        if not active:
+            return
+        if not all((s in self._temp_batch or s in self._faulted_chart_sensors) for s in active):
+            return
+        if not any(s in self._temp_batch for s in active):
+            # Every enabled chart sensor is faulted: nothing real to plot.
+            self._temp_batch.clear()
+            return
+        self._chart.push(*(self._temp_batch.get(s) for s in _CHART_SENSORS))
+        self._temp_batch.clear()

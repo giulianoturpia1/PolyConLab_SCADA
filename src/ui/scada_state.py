@@ -29,6 +29,7 @@ class _EnabledControls:
     stop:      bool = False
     ack:       bool = False
     retry:     bool = False
+    reinit:    bool = False
 
 
 STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
@@ -39,7 +40,7 @@ STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
     ScadaState.CHECKUP:       _EnabledControls(),
     ScadaState.MANUAL:        _EnabledControls(sensors=True, actuators=True, pause=True, stop=True),
     ScadaState.PAUSE:         _EnabledControls(resume=True, stop=True),
-    ScadaState.SOFT_ERROR:    _EnabledControls(ack=True, retry=True),
+    ScadaState.SOFT_ERROR:    _EnabledControls(ack=True, retry=True, reinit=True),
     ScadaState.HARD_ERROR:    _EnabledControls(),
     ScadaState.SHUTDOWN:      _EnabledControls(),
     ScadaState.UNKNOWN:       _EnabledControls(),

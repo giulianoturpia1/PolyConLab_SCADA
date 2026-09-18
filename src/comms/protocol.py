@@ -51,6 +51,19 @@ class Cmd:
     LOG_STATE = "SYST:LOG?"
     FAULT_QUERY = "SYST:FAULT?"  # Query which devices failed hardware initialisation
 
+    # Sensor re-initialisation: re-run one sensor's hardware begin() on the PLC.
+    REINIT_TEMP_IN = "SYST:REINIT:TEMP:IN"
+    REINIT_TEMP_OUT = "SYST:REINIT:TEMP:OUT"
+    REINIT_TEMP_BATH = "SYST:REINIT:TEMP:CAM"
+    REINIT_TEMP_MIX = "SYST:REINIT:TEMP:MEZ"
+    REINIT_FLOW = "SYST:REINIT:FLOW"
+    REINIT_LEVEL = "SYST:REINIT:LEVEL"
+
+    # Temperature control (manual inlet setpoint). The FW handles TEMP:SET:IN as a
+    # LOCAL TOGGLE in ManualState and sends no positive confirmation, so the SCADA
+    # cannot treat it as a state-authoritative command (see MainWindow).
+    TEMP_SET_IN = "TEMP:SET:IN"
+
     # Valves are parameterized by number, appended after a comma
     # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve numbers 1 and 2 only.
     @staticmethod
@@ -67,6 +80,11 @@ class Cmd:
     def valve_state(n: int) -> str:
         """Query for the state of valve ``n``."""
         return f"OUTP:VALV?,{n}"
+
+    @staticmethod
+    def temp_set_in(value: float) -> str:
+        """Command line to set the inlet temperature setpoint (toggles control in the FW)."""
+        return f"{Cmd.TEMP_SET_IN},{value}"
 
 
 class Evt:
@@ -122,6 +140,7 @@ class Resp:
     HIGH = "HIGH"
     LOW = "LOW"
     PONG = "PONG"
+    OK = "OK"  # positive reply to a SYST:REINIT command
 
 
 @dataclass(frozen=True)
@@ -152,6 +171,16 @@ SENSORS: dict[Sensor, str] = {
     Sensor.TEMP_MIX: Cmd.TEMP_MIX,
     Sensor.FLOW: Cmd.FLOW,
     Sensor.LEVEL: Cmd.LEVEL,
+}
+
+# Maps each logical sensor to the command that re-initialises it on the PLC.
+REINIT: dict[Sensor, str] = {
+    Sensor.TEMP_IN: Cmd.REINIT_TEMP_IN,
+    Sensor.TEMP_OUT: Cmd.REINIT_TEMP_OUT,
+    Sensor.TEMP_BATH: Cmd.REINIT_TEMP_BATH,
+    Sensor.TEMP_MIX: Cmd.REINIT_TEMP_MIX,
+    Sensor.FLOW: Cmd.REINIT_FLOW,
+    Sensor.LEVEL: Cmd.REINIT_LEVEL,
 }
 
 

@@ -73,6 +73,11 @@ class InitSequence(QObject):
         self._probe_timer.setInterval(_PROBE_TIMEOUT_MS)
         self._probe_timer.timeout.connect(self._on_probe_timeout)
 
+        # Live STATE? listener, if any, plus an epoch that invalidates in-flight
+        # work (pending listener, settle timers) when a sequence is cancelled.
+        self._state_slot: Callable[[str], None] | None = None
+        self._epoch = 0
+
     # ── Public API ─────────────────────────────────────────────────────────────
 
     @property
@@ -124,34 +129,60 @@ class InitSequence(QObject):
         self._query_state(self._on_force_state)
 
     def abort(self) -> None:
-        """Cancel any in-progress sequence (e.g. on TCP disconnect)."""
+        """Cancel any in-progress sequence (e.g. on TCP disconnect).
+
+        Drops the pending STATE? listener and bumps the epoch so a reply or a
+        settle timer belonging to the cancelled run is ignored instead of
+        starting a second, parallel handshake on the next connection.
+        """
         self._probe_timer.stop()
+        self._disconnect_state_slot()
+        self._epoch += 1
         self._running = False
 
     # ── Internal helpers ───────────────────────────────────────────────────────
 
+    def _disconnect_state_slot(self) -> None:
+        """Drop the pending STATE? listener, if any. Idempotent."""
+        if self._state_slot is None:
+            return
+        try:
+            self._plc.state_received.disconnect(self._state_slot)
+        except RuntimeError:
+            pass  # already disconnected (e.g. object deleted)
+        self._state_slot = None
+
     def _query_state(self, callback: Callable[[str], None]) -> None:
         """Send STATE? and deliver the single reply to *callback*.
 
-        A one-shot wrapper is used so the slot is automatically disconnected
-        after the first emission, preventing stale callbacks from stacking up.
+        At most one listener is connected at a time and it is dropped as soon as
+        it fires, so aborted sequences cannot leave slots stacked on the signal.
         """
+        self._disconnect_state_slot()
+        epoch = self._epoch
 
         def one_shot(state: str) -> None:
-            try:
-                self._plc.state_received.disconnect(one_shot)
-            except RuntimeError:
-                pass  # already disconnected (e.g. object deleted)
+            self._disconnect_state_slot()
+            if epoch != self._epoch:
+                return  # the sequence was cancelled while this query was in flight
             callback(state)
 
+        self._state_slot = one_shot
         self._plc.state_received.connect(one_shot)
 
         if not self._plc.query_state():
-            try:
-                self._plc.state_received.disconnect(one_shot)
-            except RuntimeError:
-                pass
+            self._disconnect_state_slot()
             self._finish(False, "Sin respuesta del PLC al consultar estado.")
+
+    def _defer_query(self, callback: Callable[[str], None]) -> None:
+        """Re-query STATE? after the settle delay, unless the sequence was cancelled."""
+        epoch = self._epoch
+
+        def go() -> None:
+            if epoch == self._epoch:
+                self._query_state(callback)
+
+        QTimer.singleShot(_SETTLE_MS, go)
 
     # ── State callbacks ────────────────────────────────────────────────────────
 
@@ -161,7 +192,7 @@ class InitSequence(QObject):
             # Normal boot path: PLC waiting for the SCADA to kick off the checkup.
             self.progress.emit("PLC en inicio — comenzando chequeo del sistema...")
             self._plc.send_event(Evt.INIT_OK)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_post_init_state))
+            self._defer_query(self._on_post_init_state)
 
         elif state == "CHECKUP":
             # PLC was already in CHECKUP (e.g. SCADA reconnected during init).
@@ -211,7 +242,15 @@ class InitSequence(QObject):
         self._finish(False, "Tiempo de espera agotado verificando sensores.")
 
     def _on_probe_done(self, results: dict[Sensor, bool]) -> None:
-        """Evaluate sensor probe results and complete the handshake accordingly."""
+        """Evaluate sensor probe results and complete the handshake accordingly.
+
+        Replies that arrive after the probe timed out belong to a sequence that
+        already finished; acting on them would send the OK events and emit a
+        second ``finished`` for a run the controller has moved on from.
+        """
+        if not self._running:
+            return
+
         self._probe_timer.stop()
 
         for sensor, ok in results.items():
@@ -228,7 +267,7 @@ class InitSequence(QObject):
             self.progress.emit("Sensores OK — habilitando sistema...")
             self._plc.send_event(Evt.SCADA_OK)
             self._plc.send_event(Evt.SENSORS_OK)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_final_state))
+            self._defer_query(self._on_final_state)
 
     def _on_final_state(self, state: str) -> None:
         """Confirm the PLC reached MANUAL after the successful handshake."""
@@ -249,7 +288,7 @@ class InitSequence(QObject):
             self.progress.emit("Reconociendo error y continuando...")
             self._plc.send_event(Evt.ACK_FAULT)
             self._plc.send_event(Evt.CONDITION_CLEARED)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_force_checkup_state))
+            self._defer_query(self._on_force_checkup_state)
         else:
             self._finish(False, f"No se puede continuar desde estado «{state}»")
 
@@ -267,10 +306,12 @@ class InitSequence(QObject):
         self.progress.emit("Completando acceso a MANUAL sin re-verificar sensores...")
         self._plc.send_event(Evt.SCADA_OK)
         self._plc.send_event(Evt.SENSORS_OK)
-        QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_final_state))
+        self._defer_query(self._on_final_state)
 
     # ── Finish ─────────────────────────────────────────────────────────────────
 
     def _finish(self, success: bool, msg: str) -> None:
+        self._disconnect_state_slot()
+        self._epoch += 1
         self._running = False
         self.finished.emit(success, msg)
