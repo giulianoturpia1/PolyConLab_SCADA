@@ -19,6 +19,7 @@ These have a Python class in `src/ui/widgets/`. Layout changes go in Qt Designer
 | `row_heater` | `ActuatorRow` | `actuator_row.py` | Calentador ON/OFF row |
 | `row_pump` | `ActuatorRow` | `actuator_row.py` | Bomba ON/OFF row |
 | `row_chiller` | `ActuatorRow` | `actuator_row.py` | Enfriador ON/OFF row |
+| `row_mixer` | `ActuatorRow` | `actuator_row.py` | Mezclador ON/OFF row |
 | `row_valve1` | `ActuatorRow` | `actuator_row.py` | Válvula 1 Abrir/Cerrar row |
 | `row_valve2` | `ActuatorRow` | `actuator_row.py` | Válvula 2 Abrir/Cerrar row |
 

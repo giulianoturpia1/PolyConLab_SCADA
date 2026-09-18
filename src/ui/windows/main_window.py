@@ -103,6 +103,7 @@ class MainWindow(QMainWindow):
         self._ui.row_heater.configure("Calentador")
         self._ui.row_pump.configure("Bomba")
         self._ui.row_chiller.configure("Enfriador")
+        self._ui.row_mixer.configure("Mezclador")
         self._ui.row_valve1.configure("Válvula 1", "Abrir", "Cerrar")
         self._ui.row_valve2.configure("Válvula 2", "Abrir", "Cerrar")
 
@@ -111,6 +112,7 @@ class MainWindow(QMainWindow):
             Device.HEATER: self._ui.row_heater,
             Device.PUMP: self._ui.row_pump,
             Device.CHILLER: self._ui.row_chiller,
+            Device.MIXER: self._ui.row_mixer,
             Device.VALVE1: self._ui.row_valve1,
             Device.VALVE2: self._ui.row_valve2,
         }
