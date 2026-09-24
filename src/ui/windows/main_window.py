@@ -148,8 +148,9 @@ class MainWindow(QMainWindow):
         # ── Menu ──────────────────────────────────────────────────────────────
         self._ui.action_log.triggered.connect(self._toggle_log)
         self._ui.action_connection.triggered.connect(self._open_settings)
-        self._ui.action_download.triggered.connect(self._download_data)
+        self._ui.action_download.triggered.connect(lambda: self._download_data())
         self._ui.action_link_stats.triggered.connect(self._show_link_stats)
+        self._ui.btn_reset_measurements.clicked.connect(self._reset_measurements)
 
         # ── Connection button → controller ─────────────────────────────────────
         self._ui.btn_connect.clicked.connect(lambda: self._controller.toggle_connection(self._host, self._port))
@@ -228,16 +229,52 @@ class MainWindow(QMainWindow):
 
     # ── Misc slots ────────────────────────────────────────────────────────────────
 
-    def _download_data(self) -> None:
+    def _reset_measurements(self) -> None:
+        """Discard the chart and the recorded measurements after confirming; time restarts at 0 s.
+
+        Offers to download the data first, since the discarded rows cannot be recovered.
+        """
+        rows = self._log.row_count
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Reiniciar Mediciones")
+        box.setText(f"Se descartarán el gráfico y las {rows} mediciones registradas.")
+        box.setInformativeText("Esta acción no se puede deshacer. El tiempo del gráfico vuelve a 0 s.")
+        btn_download = box.addButton("Descargar y reiniciar", QMessageBox.ButtonRole.AcceptRole)
+        btn_discard = box.addButton("Descartar y reiniciar", QMessageBox.ButtonRole.DestructiveRole)
+        btn_cancel = box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(btn_cancel)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is btn_download:
+            if not self._download_data(default_limit=rows):
+                self.log("Reinicio de mediciones cancelado: no se guardaron los datos.")
+                return
+        elif clicked is not btn_discard:
+            return
+
+        self._chart.clear()
+        self._log.clear()
+        self.log(f"Mediciones reiniciadas ({rows} descartadas).")
+
+    def _download_data(self, default_limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Export a configurable number of measurements to CSV on the user's computer.
 
-        Prompts the user for how many measurements to save (default EXPORT_DEFAULT_ROWS).
+        Prompts the user for how many measurements to save (*default_limit*, EXPORT_DEFAULT_ROWS
+        from the menu). Returns True only if a file was written.
         """
         limit, ok = QInputDialog.getInt(
-            self, "Cantidad de mediciones", "Número de mediciones a guardar:", EXPORT_DEFAULT_ROWS, 1, EXPORT_MAX_ROWS, 1
+            self,
+            "Cantidad de mediciones",
+            "Número de mediciones a guardar:",
+            max(1, min(default_limit, EXPORT_MAX_ROWS)),
+            1,
+            EXPORT_MAX_ROWS,
+            1,
         )
         if not ok:
-            return
+            return False
 
         default_name = f"mediciones_{QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')}.csv"
         file_path, _ = QFileDialog.getSaveFileName(
@@ -247,12 +284,13 @@ class MainWindow(QMainWindow):
             "Archivos CSV (*.csv)",
         )
         if not file_path:
-            return
+            return False
 
         if self._log.export_csv(file_path, limit=limit):
             self.log(f"Datos descargados en {file_path} ({limit} filas).")
-        else:
-            QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")
+            return True
+        QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")
+        return False
 
     def _on_log_message(self, msg: str) -> None:
         """Send a raw message typed in the log window to the PLC."""

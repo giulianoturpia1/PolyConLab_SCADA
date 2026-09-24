@@ -112,6 +112,15 @@ class MeasurementLog(QObject):
             }
         )
 
+    @property
+    def row_count(self) -> int:
+        """Number of rows currently recorded."""
+        return len(self._rows)
+
+    def clear(self) -> None:
+        """Discard every recorded row. The confirmed-status snapshot is kept: it is still the PLC's truth."""
+        self._rows.clear()
+
     def export_csv(self, path: str | Path, limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Write the last *limit* recorded rows to *path* as CSV; return False if there are none.
 

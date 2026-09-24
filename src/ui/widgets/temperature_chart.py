@@ -101,6 +101,13 @@ class TemperatureChart(QObject):
         """Show or hide the series at ``idx`` (0=Entrada, 1=Salida, 2=Camisa, 3=Mezcla)."""
         self._series[idx].setVisible(visible)
 
+    def clear(self) -> None:
+        """Discard every plotted point and restart the time axis at 0 s with the next reading."""
+        for s in self._series:
+            s.clear()
+        self._t0 = None
+        self._ax_x.setRange(0, CHART_WINDOW_S)
+
     def reset_visibility(self) -> None:
         """Hide all series — called on PLC disconnect so the chart starts clean on reconnect."""
         for s in self._series:
