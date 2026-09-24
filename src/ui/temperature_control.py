@@ -73,13 +73,13 @@ class TemperatureControl(QObject):
         if self._plc.set_temperature_control(value):
             # The indicator is not moved here: it follows the PLC, either through the heater state
             # or through the confirmation this command gets back.
-            self.log.emit(f"Control de temperatura solicitado: {Cmd.temp_set_in(value)}")
+            self.log.emit(f"Control de Temperatura Solicitado: {Cmd.temp_set_in(value)}")
         else:
             self.log.emit("No conectado — comando de temperatura no enviado.")
 
     def _on_temp_control_changed(self, on: bool) -> None:
         """Log the control state the PLC reported after a toggle."""
-        self.log.emit(f"Control de temperatura {'ACTIVADO' if on else 'DESACTIVADO'} (confirmado por el PLC).")
+        self.log.emit(f"Control de Temperatura {'ACTIVADO' if on else 'DESACTIVADO'} (confirmado por el PLC).")
 
     def _on_actuator_changed(self, device: Device, on: bool) -> None:
         """Update the indicator when the PLC's heater state changes."""
