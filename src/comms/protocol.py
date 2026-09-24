@@ -98,6 +98,8 @@ class Evt:
     * :attr:`FAULT_RECOVERABLE` — at least one sensor probe failed; PLC goes to SOFT ERROR.
     """
 
+    PREFIX = "EVT:"  # every event line starts with this; the PLC answers an event only to reject it
+
     # Initialisation handshake
     INIT_OK = "EVT:INIT OK"
     SCADA_OK = "EVT:SCADA OK"

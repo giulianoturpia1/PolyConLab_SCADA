@@ -17,7 +17,7 @@ from math import ceil
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.link_stats import LinkStats
-from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Resp, error_code, is_error, parse_value
+from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Evt, Resp, error_code, is_error, parse_value
 from config.polling import (
     FW_LINES_PER_SECOND,
     LINK_STATS_WINDOW,
@@ -175,8 +175,17 @@ class PlcClient(QObject):
         return self._send_line(evt)
 
     def send_raw(self, text: str) -> bool:
-        """Send an arbitrary line (e.g. from the log terminal). Returns False if not connected."""
-        return self._send_line(text)
+        """Send an arbitrary line typed in the log terminal. Returns False if not connected.
+
+        A command is queued like any other, so its reply is matched to it (and shown in the log)
+        instead of being taken by whichever poll happens to be waiting, and it respects the
+        in-flight limit. An event (``EVT:...``) is written directly: the PLC only answers an event
+        when it rejects it, so there is no reply to wait for.
+        """
+        line = text.strip()
+        if line.upper().startswith(Evt.PREFIX):
+            return self._send_line(line)
+        return self._request(line, self._resolve_raw)
 
     def set_sensor_enabled(self, sensor: Sensor, enabled: bool) -> None:
         """Include or exclude a sensor from the periodic poll round."""
@@ -382,6 +391,11 @@ class PlcClient(QObject):
             # The oldest pending command did not claim this line: it arrived late or out of order.
             self._stats.on_unmatched()
         self.line_received.emit(line)
+
+    @staticmethod
+    def _resolve_raw(line: str) -> bool:
+        """Accept whatever reply comes back for a terminal command; the log shows it as it arrived."""
+        return True
 
     def _resolve_state(self, line: str) -> bool:
         """Emit the reply as the FSM state name; consume an error reply without reporting a state.
