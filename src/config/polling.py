@@ -13,6 +13,11 @@ SAMPLE_PERIOD_MIN_MS = 100
 SAMPLE_PERIOD_MAX_MS = 60_000
 SAMPLE_PERIOD_STEP_MS = 50
 
+# Commands the SCADA lets wait for a reply at once. Mirrors the firmware's
+# config::kMaxInFlightCommands: a command sent while that many are unanswered is refused with
+# -106 BUSY, so further commands are held here until a reply frees a slot. Keep in sync.
+MAX_IN_FLIGHT_COMMANDS = 4
+
 # Firmware ingest rate the recommended minimum period is derived from: the FW reads
 # config::kMaxLinesPerPollTick (4) lines every config::kAppTaskPeriodMs (100 ms). Keep in sync.
 FW_LINES_PER_SECOND = 40

@@ -207,6 +207,22 @@ def parse_value(line: str) -> float | None:
         return None
 
 
+class ErrCode:
+    """Numeric codes of the firmware error replies the SCADA reacts to specifically."""
+
+    BUSY = -106  # every command slot was taken; the command was not executed
+
+
+def error_code(response: str) -> int | None:
+    """Numeric code of a firmware error reply (e.g. -106 for "-106,'BUSY'"), or None if not an error."""
+    if not is_error(response):
+        return None
+    try:
+        return int(response.lstrip().split(",", 1)[0])
+    except ValueError:
+        return None
+
+
 def is_error(response: str) -> bool:
     """True if ``response`` is a firmware error reply (e.g. "-101,'COMMAND REJECTED'").
 

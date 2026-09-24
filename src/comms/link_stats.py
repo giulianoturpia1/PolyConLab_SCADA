@@ -26,6 +26,7 @@ class LinkStats:
         self.replies = 0
         self.timeouts = 0
         self.unmatched = 0
+        self.busy = 0
         self.rounds_done = 0
         self.rounds_skipped = 0
 
@@ -39,6 +40,10 @@ class LinkStats:
     def on_timeout(self) -> None:
         """A command's reply never arrived and it was dropped from the queue."""
         self.timeouts += 1
+
+    def on_busy(self) -> None:
+        """The PLC refused a command with -106 BUSY: all of its command slots were taken."""
+        self.busy += 1
 
     def on_unmatched(self) -> None:
         """A line arrived that the oldest pending command did not accept (late or out of order)."""
@@ -77,7 +82,7 @@ class LinkStats:
             f"{self.rounds_done} rondas completas, {self.rounds_skipped} salteadas "
             f"-> {self.samples_per_second(now_ms):.2f} muestras/s (objetivo {target:.2f}); "
             f"{rnd_txt}; {lat_txt}; "
-            f"{self.timeouts} respuestas perdidas, {self.unmatched} fuera de orden."
+            f"{self.timeouts} respuestas perdidas, {self.unmatched} fuera de orden, {self.busy} BUSY."
         )
 
     @staticmethod

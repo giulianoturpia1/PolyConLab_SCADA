@@ -17,10 +17,11 @@ from math import ceil
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.link_stats import LinkStats
-from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, parse_value
+from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Resp, error_code, is_error, parse_value
 from config.polling import (
     FW_LINES_PER_SECOND,
     LINK_STATS_WINDOW,
+    MAX_IN_FLIGHT_COMMANDS,
     PENDING_TTL_MS,
     SAMPLE_PERIOD_HEADROOM,
     SENSOR_POLL_INTERVAL_MS,
@@ -33,7 +34,7 @@ from network.tcp_client import TcpClient
 
 @dataclass
 class _Pending:
-    """A command awaiting its reply.
+    """A command awaiting its reply — written to the wire, or held until a command slot frees.
 
     ``resolve(line)`` returns True if the line belonged to this command (and was
     handled), False if it should be left for a later listener. ``quiet`` marks
@@ -41,10 +42,12 @@ class _Pending:
     """
 
     resolve: Callable[[str], bool]
+    line: str = field(default="")  # the command text, written when a slot is free
     quiet: bool = field(default=False)
-    deadline_ms: int = field(default=0)
     is_poll: bool = field(default=False)  # counted in _polls_outstanding, so a drop must uncount it
+    sent: bool = field(default=False)  # written to the wire (occupies one of the PLC's command slots)
     sent_ms: int = field(default=0)  # when the command was written, for the reply latency
+    deadline_ms: int = field(default=0)  # after this, with no reply, the command is abandoned
 
 
 class PlcClient(QObject):
@@ -164,10 +167,8 @@ class PlcClient(QObject):
         :attr:`actuator_rejected`.
         """
         spec = ACTUATORS[dev]
-        if not self._send_line(spec.on_cmd if on else spec.off_cmd):
-            return
         expected = spec.on_resp if on else spec.off_resp
-        self._queue_pending(partial(self._resolve_actuator, dev, on, expected))
+        self._request(spec.on_cmd if on else spec.off_cmd, partial(self._resolve_actuator, dev, on, expected))
 
     def send_event(self, evt: str) -> bool:
         """Send a state-machine event line (``EVT:…``). Returns False if not connected."""
@@ -191,10 +192,7 @@ class PlcClient(QObject):
         each one appends a resolver to the FIFO queue, so replies are matched
         in order.
         """
-        if not self._send_line(Cmd.STATE, quiet=True):
-            return False
-        self._queue_pending(self._resolve_state, quiet=True)
-        return True
+        return self._request(Cmd.STATE, self._resolve_state, quiet=True)
 
     def query_all_actuator_states(self) -> bool:
         """Query the state of all actuators and emit :attr:`actuator_changed` for each.
@@ -212,8 +210,7 @@ class PlcClient(QObject):
         ]
 
         for dev, query in queries:
-            if self._send_line(query, quiet=True):
-                self._queue_pending(partial(self._resolve_actuator_state, dev), quiet=True)
+            self._request(query, partial(self._resolve_actuator_state, dev), quiet=True)
 
         return True
 
@@ -223,10 +220,7 @@ class PlcClient(QObject):
         Returns False if not connected. Sent non-quiet so the operator sees the
         recovery attempt in the log terminal.
         """
-        if not self._send_line(REINIT[sensor]):
-            return False
-        self._queue_pending(partial(self._resolve_reinit, sensor))
-        return True
+        return self._request(REINIT[sensor], partial(self._resolve_reinit, sensor))
 
     def set_temperature_control(self, value: float) -> bool:
         """Send the inlet setpoint, which the PLC treats as a toggle, and correlate its reply.
@@ -235,10 +229,7 @@ class PlcClient(QObject):
         like any other — an unclaimed reply would otherwise be offered to whatever command happens
         to be at the head of the queue.
         """
-        if not self._send_line(Cmd.temp_set_in(value)):
-            return False
-        self._queue_pending(self._resolve_temp_control)
-        return True
+        return self._request(Cmd.temp_set_in(value), self._resolve_temp_control)
 
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
         """Query every sensor once and report pass/fail per sensor via *on_done*.
@@ -260,8 +251,6 @@ class PlcClient(QObject):
                 on_done(dict(results))
 
         for sensor, query in SENSORS.items():
-            if not self._send_line(query, quiet=True):
-                continue  # skip sensors whose query could not be sent
 
             def make_resolver(s: Sensor) -> Callable[[str], bool]:
                 def resolve(line: str) -> bool:
@@ -271,8 +260,8 @@ class PlcClient(QObject):
 
                 return resolve
 
-            self._queue_pending(make_resolver(sensor), quiet=True)
-            pending_count[0] += 1
+            if self._request(query, make_resolver(sensor), quiet=True):
+                pending_count[0] += 1
 
         return pending_count[0] > 0
 
@@ -284,10 +273,32 @@ class PlcClient(QObject):
         """Stop the periodic STATE? poll."""
         self._state_poll_timer.stop()
 
-    def _queue_pending(self, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> None:
-        """Queue a resolver for the next reply, with the deadline after which it is abandoned."""
-        now = self._now_ms()
-        self._pending.append(_Pending(resolve, quiet, now + PENDING_TTL_MS, is_poll, now))
+    def _request(self, line: str, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> bool:
+        """Queue a command and the resolver for its reply; write it now if a PLC command slot is free.
+
+        Returns False if not connected. Commands are written in queue order and at most
+        MAX_IN_FLIGHT_COMMANDS wait for a reply at once, so the PLC never has to refuse one
+        with BUSY; the rest are written by :meth:`_pump` as replies come back.
+        """
+        if not self._tcp.is_connected:
+            return False
+        self._pending.append(_Pending(resolve, line=line, quiet=quiet, is_poll=is_poll))
+        self._pump()
+        return True
+
+    def _pump(self) -> None:
+        """Write held commands, oldest first, while the PLC has a free command slot."""
+        in_flight = sum(1 for p in self._pending if p.sent)
+        for p in self._pending:
+            if in_flight >= MAX_IN_FLIGHT_COMMANDS:
+                return
+            if p.sent:
+                continue
+            if not self._send_line(p.line, quiet=p.quiet):
+                return
+            now = self._now_ms()
+            p.sent, p.sent_ms, p.deadline_ms = True, now, now + PENDING_TTL_MS
+            in_flight += 1
 
     @staticmethod
     def _now_ms() -> int:
@@ -315,8 +326,7 @@ class PlcClient(QObject):
         for sensor, query in SENSORS.items():
             if sensor not in self._enabled_sensors:
                 continue
-            if self._send_line(query, quiet=True):
-                self._queue_pending(partial(self._resolve_sensor, sensor), quiet=True, is_poll=True)
+            if self._request(query, partial(self._resolve_sensor, sensor), quiet=True, is_poll=True):
                 self._polls_outstanding += 1
 
     # ── Internals: receiving ────────────────────────────────────────────────────
@@ -338,18 +348,25 @@ class PlcClient(QObject):
         queries) without disturbing the queue. Poll replies are resolved quietly.
         """
         now = self._now_ms()
-        while self._pending and self._pending[0].deadline_ms <= now:
+        if error_code(line) == ErrCode.BUSY:
+            self._stats.on_busy()
+        dropped_any = False
+        # Only written commands can time out; the head is always written when anything is.
+        while self._pending and self._pending[0].sent and self._pending[0].deadline_ms <= now:
             # A reply was lost: abandoning the entry keeps the queue moving instead of letting every
             # later reply be offered to a resolver that will never match. A dropped poll must also be
             # uncounted, or _poll_sensors would skip every round from here on.
             dropped = self._pending.popleft()
+            dropped_any = True
             self._stats.on_timeout()
             if dropped.is_poll and self._polls_outstanding > 0:
                 self._polls_outstanding -= 1
             if not self._pending:
                 self._polls_outstanding = 0
+        if dropped_any:
+            self._pump()
 
-        if self._pending:
+        if self._pending and self._pending[0].sent:
             head = self._pending[0]
             if head.resolve(line):
                 self._stats.on_reply(now - head.sent_ms)
@@ -358,6 +375,7 @@ class PlcClient(QObject):
                     # Nothing outstanding: re-assert the invariant so a dropped
                     # poll reply cannot stall _poll_sensors forever.
                     self._polls_outstanding = 0
+                self._pump()  # a slot freed: write the next held command
                 if not head.quiet:
                     self.line_received.emit(line)
                 return
@@ -366,8 +384,13 @@ class PlcClient(QObject):
         self.line_received.emit(line)
 
     def _resolve_state(self, line: str) -> bool:
-        """Accept the next response line as the FSM state name and emit it."""
-        self.state_received.emit(line)
+        """Emit the reply as the FSM state name; consume an error reply without reporting a state.
+
+        An error (e.g. -106 BUSY) says nothing about the PLC's state, so the last known state
+        stands and the next periodic STATE? asks again.
+        """
+        if not is_error(line):
+            self.state_received.emit(line)
         return True
 
     def _resolve_reinit(self, sensor: Sensor, line: str) -> bool:
@@ -422,6 +445,10 @@ class PlcClient(QObject):
 
     def _resolve_sensor(self, sensor: Sensor, line: str) -> bool:
         """Consume a numeric reading, a HIGH/LOW status or an error; ignore anything else."""
+        if error_code(line) == ErrCode.BUSY:
+            # Not a sensor fault: the PLC had no free slot. Keep the last reading; the next round re-asks.
+            self._on_poll_answered()
+            return True
         if is_error(line):
             self._on_poll_answered()
             self.sensor_fault.emit(sensor)
