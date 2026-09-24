@@ -29,4 +29,5 @@ CHART_POINT_MARKER_PX = 6  # visible point-marker diameter drawn on each series
 
 # ── Connection settings dialog ───────────────────────────────────────────────
 SETTINGS_DIALOG_W_PX = 320
-SETTINGS_DIALOG_H_PX = 148
+SETTINGS_DIALOG_H_PX = 214
+SETTINGS_HINT_FONT_PX = 11  # sampling-period hint under its field

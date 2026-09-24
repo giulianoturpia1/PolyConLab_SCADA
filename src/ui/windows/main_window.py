@@ -149,6 +149,7 @@ class MainWindow(QMainWindow):
         self._ui.action_log.triggered.connect(self._toggle_log)
         self._ui.action_connection.triggered.connect(self._open_settings)
         self._ui.action_download.triggered.connect(self._download_data)
+        self._ui.action_link_stats.triggered.connect(self._show_link_stats)
 
         # ── Connection button → controller ─────────────────────────────────────
         self._ui.btn_connect.clicked.connect(lambda: self._controller.toggle_connection(self._host, self._port))
@@ -179,12 +180,29 @@ class MainWindow(QMainWindow):
             self._log_win.show()
 
     def _open_settings(self) -> None:
-        """Open the connection settings dialog and store the new host/port."""
-        dlg = SettingsDialog(self._host, self._port, self)
-        if dlg.exec():
-            self._host = dlg.host()
-            self._port = dlg.port()
-            self.log(f"Configuración Actualizada: {self._host}:{self._port}.")
+        """Open the settings dialog; store the new host/port and apply the sampling period at once."""
+        recommended_min = PlcClient.recommended_min_period_ms()
+        dlg = SettingsDialog(self._host, self._port, self._plc.sample_period_ms, recommended_min, self)
+        if not dlg.exec():
+            return
+        self._host = dlg.host()
+        self._port = dlg.port()
+        self.log(f"Configuración Actualizada: {self._host}:{self._port}.")
+
+        period = dlg.sample_period_ms()
+        if period != self._plc.sample_period_ms:
+            if self._plc.is_connected:
+                # Close the previous period's statistics window before a new one starts.
+                self.log(self._plc.link_stats_summary())
+            self._plc.set_sample_period(period)
+            self.log(f"Período de muestreo: {period} ms.")
+            if period < recommended_min:
+                self.log(f"Aviso: por debajo del mínimo recomendado ({recommended_min} ms).")
+
+    def _show_link_stats(self) -> None:
+        """Write the link statistics since the last connect or period change to the log, and show it."""
+        self.log(self._plc.link_stats_summary())
+        self._toggle_log()
 
     # ── Connection-indicator chrome ───────────────────────────────────────────────
 

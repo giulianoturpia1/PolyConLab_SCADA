@@ -11,12 +11,13 @@ temperature SensorCard click in MainWindow enables or disables its series.
 
 from __future__ import annotations
 
+from time import monotonic
+
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
 
 from config.data import CHART_TEMP_MAX_C, CHART_TEMP_MIN_C, CHART_WINDOW_S
-from config.polling import SENSOR_POLL_INTERVAL_MS
 from ui.style import metrics as m
 from ui.style import palette as col
 
@@ -35,7 +36,7 @@ class TemperatureChart(QObject):
     def __init__(self, chart_view: QChartView) -> None:
         """Build the chart and attach it to the view."""
         super().__init__()
-        self._t = 0
+        self._t0: float | None = None  # monotonic time of the first point; x = seconds since then
         self._series: list[QLineSeries] = []
 
         self._chart = self._build_chart()
@@ -119,16 +120,23 @@ class TemperatureChart(QObject):
         Only series that received a new point participate in the window-slide
         removal, keeping every series' point count internally consistent.
         """
-        step_s = SENSOR_POLL_INTERVAL_MS / 1000  # one sample, in seconds
-        t_seconds = self._t * step_s
-        updated: list[QLineSeries] = []
+        # X is real elapsed time, not a sample count, so the axis stays true when the sampling
+        # period changes mid-session or rounds are skipped.
+        now = monotonic()
+        if self._t0 is None:
+            self._t0 = now
+        t_seconds = now - self._t0
         for s, v in zip(self._series, (tin, tout, tcam, tmez)):
             if v is not None:
                 s.append(t_seconds, v)
-                updated.append(s)
-        self._t += 1
 
         if t_seconds >= CHART_WINDOW_S:
-            self._ax_x.setRange(t_seconds - CHART_WINDOW_S + step_s, t_seconds)
-            for s in updated:
-                s.removePoints(0, 1)
+            window_start = t_seconds - CHART_WINDOW_S
+            self._ax_x.setRange(window_start, t_seconds)
+            for s in self._series:
+                # Drop every point that slid out of the window, whatever the sampling period.
+                stale = 0
+                while stale < s.count() and s.at(stale).x() < window_start:
+                    stale += 1
+                if stale:
+                    s.removePoints(0, stale)

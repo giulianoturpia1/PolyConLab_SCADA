@@ -527,6 +527,7 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
    <widget class="QMenu" name="menu_avanzado">
     <property name="title"><string>Avanzado</string></property>
     <addaction name="action_log"/>
+    <addaction name="action_link_stats"/>
     <addaction name="action_download"/>
    </widget>
    <widget class="QMenu" name="menu_configuracion">
@@ -541,6 +542,9 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
   </action>
   <action name="action_connection">
    <property name="text"><string>Conexión...</string></property>
+  </action>
+  <action name="action_link_stats">
+   <property name="text"><string>Estadísticas de Enlace</string></property>
   </action>
   <action name="action_download">
    <property name="text"><string>Descargar datos</string></property>

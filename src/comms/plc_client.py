@@ -12,11 +12,20 @@ from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
+from math import ceil
 
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
+from comms.link_stats import LinkStats
 from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, parse_value
-from config.polling import PENDING_TTL_MS, SENSOR_POLL_INTERVAL_MS, STATE_POLL_INTERVAL_MS
+from config.polling import (
+    FW_LINES_PER_SECOND,
+    LINK_STATS_WINDOW,
+    PENDING_TTL_MS,
+    SAMPLE_PERIOD_HEADROOM,
+    SENSOR_POLL_INTERVAL_MS,
+    STATE_POLL_INTERVAL_MS,
+)
 from models import Device, Sensor
 from network.tcp_client import TcpClient
 
@@ -35,6 +44,7 @@ class _Pending:
     quiet: bool = field(default=False)
     deadline_ms: int = field(default=0)
     is_poll: bool = field(default=False)  # counted in _polls_outstanding, so a drop must uncount it
+    sent_ms: int = field(default=0)  # when the command was written, for the reply latency
 
 
 class PlcClient(QObject):
@@ -66,6 +76,8 @@ class PlcClient(QObject):
         self._rx_buffer = b""
         self._pending: deque[_Pending] = deque()
         self._polls_outstanding = 0
+        self._round_start_ms = 0
+        self._stats = LinkStats(LINK_STATS_WINDOW, self._now_ms())
 
         # Sensors currently included in each poll round.  Starts empty; each
         # sensor is added only when the user clicks its card to enable polling.
@@ -111,6 +123,36 @@ class PlcClient(QObject):
     def is_connecting(self) -> bool:
         """True while a connection attempt is in progress."""
         return self._tcp.is_connecting
+
+    # ── Sampling period and link statistics ────────────────────────────────────
+
+    @property
+    def sample_period_ms(self) -> int:
+        """Current sensor sampling period (ms): one poll round per period."""
+        return self._poll_timer.interval()
+
+    def set_sample_period(self, period_ms: int) -> None:
+        """Change the sampling period, effective immediately, and start a fresh statistics window."""
+        self._poll_timer.setInterval(period_ms)
+        self.reset_link_stats()
+
+    @staticmethod
+    def recommended_min_period_ms() -> int:
+        """Fastest period the firmware is expected to sustain with every sensor enabled.
+
+        One round is one line per sensor; the firmware ingests FW_LINES_PER_SECOND lines, and
+        SAMPLE_PERIOD_HEADROOM leaves room for the state/actuator queries sharing the link.
+        An estimate — the bench test with :meth:`link_stats_summary` gives the real limit.
+        """
+        return ceil(len(SENSORS) * 1000 / FW_LINES_PER_SECOND * SAMPLE_PERIOD_HEADROOM)
+
+    def link_stats_summary(self) -> str:
+        """One log line describing link health since the last reset (connect or period change)."""
+        return self._stats.summary(self._now_ms(), self.sample_period_ms)
+
+    def reset_link_stats(self) -> None:
+        """Start a new statistics window now."""
+        self._stats.reset(self._now_ms())
 
     # ── Sending ──────────────────────────────────────────────────────────────
 
@@ -244,8 +286,13 @@ class PlcClient(QObject):
 
     def _queue_pending(self, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> None:
         """Queue a resolver for the next reply, with the deadline after which it is abandoned."""
-        deadline = int(QDateTime.currentMSecsSinceEpoch()) + PENDING_TTL_MS
-        self._pending.append(_Pending(resolve, quiet, deadline, is_poll))
+        now = self._now_ms()
+        self._pending.append(_Pending(resolve, quiet, now + PENDING_TTL_MS, is_poll, now))
+
+    @staticmethod
+    def _now_ms() -> int:
+        """Wall-clock milliseconds, the time base for deadlines, latencies and statistics."""
+        return int(QDateTime.currentMSecsSinceEpoch())
 
     # ── Internals: sending ─────────────────────────────────────────────────────
 
@@ -261,7 +308,10 @@ class PlcClient(QObject):
     def _poll_sensors(self) -> None:
         """Query each enabled sensor once. Skips a round while the previous one is still draining."""
         if self._polls_outstanding > 0:
+            # The PLC has not answered the previous round yet: it is not keeping up with this period.
+            self._stats.on_round_skipped()
             return
+        self._round_start_ms = self._now_ms()
         for sensor, query in SENSORS.items():
             if sensor not in self._enabled_sensors:
                 continue
@@ -287,12 +337,13 @@ class PlcClient(QObject):
         that command; otherwise the line is left for listeners (e.g. log-terminal
         queries) without disturbing the queue. Poll replies are resolved quietly.
         """
-        now = int(QDateTime.currentMSecsSinceEpoch())
+        now = self._now_ms()
         while self._pending and self._pending[0].deadline_ms <= now:
             # A reply was lost: abandoning the entry keeps the queue moving instead of letting every
             # later reply be offered to a resolver that will never match. A dropped poll must also be
             # uncounted, or _poll_sensors would skip every round from here on.
             dropped = self._pending.popleft()
+            self._stats.on_timeout()
             if dropped.is_poll and self._polls_outstanding > 0:
                 self._polls_outstanding -= 1
             if not self._pending:
@@ -301,6 +352,7 @@ class PlcClient(QObject):
         if self._pending:
             head = self._pending[0]
             if head.resolve(line):
+                self._stats.on_reply(now - head.sent_ms)
                 self._pending.popleft()
                 if not self._pending:
                     # Nothing outstanding: re-assert the invariant so a dropped
@@ -309,6 +361,8 @@ class PlcClient(QObject):
                 if not head.quiet:
                     self.line_received.emit(line)
                 return
+            # The oldest pending command did not claim this line: it arrived late or out of order.
+            self._stats.on_unmatched()
         self.line_received.emit(line)
 
     def _resolve_state(self, line: str) -> bool:
@@ -369,18 +423,25 @@ class PlcClient(QObject):
     def _resolve_sensor(self, sensor: Sensor, line: str) -> bool:
         """Consume a numeric reading, a HIGH/LOW status or an error; ignore anything else."""
         if is_error(line):
-            self._polls_outstanding -= 1
+            self._on_poll_answered()
             self.sensor_fault.emit(sensor)
             return True
         if parse_value(line) is not None or line in (Resp.HIGH, Resp.LOW):
-            self._polls_outstanding -= 1
+            self._on_poll_answered()
             self.sensor_updated.emit(sensor, line)
             return True
         return False
 
+    def _on_poll_answered(self) -> None:
+        """Count one poll reply; the last reply of a round closes it in the statistics."""
+        self._polls_outstanding -= 1
+        if self._polls_outstanding == 0:
+            self._stats.on_round_done(self._now_ms() - self._round_start_ms)
+
     # ── Internals: lifecycle ────────────────────────────────────────────────────
 
     def _on_connected(self) -> None:
+        self.reset_link_stats()
         self._poll_timer.start()
         self.connected.emit()
 
