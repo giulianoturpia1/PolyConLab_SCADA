@@ -16,16 +16,10 @@ from functools import partial
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, Resp, is_error, parse_value
+from config.polling import PENDING_TTL_MS, SENSOR_POLL_INTERVAL_MS, STATE_POLL_INTERVAL_MS
 from models import Device, Sensor
 from network.tcp_client import TcpClient
 
-POLL_INTERVAL_MS = 1_000  # sensor read cadence
-_STATE_POLL_INTERVAL_MS = 2_000  # FSM state label refresh cadence
-
-# How long (ms) a command may sit at the head of the reply queue before it is dropped. The firmware
-# answers every command it accepts, so this only fires when a reply is lost on the wire; without it
-# one lost reply would stall the correlator for the rest of the session.
-_PENDING_TTL_MS = 5_000
 
 
 @dataclass
@@ -78,13 +72,13 @@ class PlcClient(QObject):
         self._enabled_sensors: set[Sensor] = set()
 
         self._poll_timer = QTimer(self)
-        self._poll_timer.setInterval(POLL_INTERVAL_MS)
+        self._poll_timer.setInterval(SENSOR_POLL_INTERVAL_MS)
         self._poll_timer.timeout.connect(self._poll_sensors)
 
         # Periodic STATE? poll — started by the owner (MainWindow) after the init
         # sequence completes; stopped automatically on disconnect.
         self._state_poll_timer = QTimer(self)
-        self._state_poll_timer.setInterval(_STATE_POLL_INTERVAL_MS)
+        self._state_poll_timer.setInterval(STATE_POLL_INTERVAL_MS)
         self._state_poll_timer.timeout.connect(self.query_state)
 
         self._tcp.connecting.connect(self.connecting)
@@ -241,7 +235,7 @@ class PlcClient(QObject):
         return pending_count[0] > 0
 
     def start_state_polling(self) -> None:
-        """Start the periodic STATE? poll (interval = ``_STATE_POLL_INTERVAL_MS``)."""
+        """Start the periodic STATE? poll (interval = ``config.polling.STATE_POLL_INTERVAL_MS``)."""
         self._state_poll_timer.start()
 
     def stop_state_polling(self) -> None:
@@ -250,7 +244,7 @@ class PlcClient(QObject):
 
     def _queue_pending(self, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> None:
         """Queue a resolver for the next reply, with the deadline after which it is abandoned."""
-        deadline = int(QDateTime.currentMSecsSinceEpoch()) + _PENDING_TTL_MS
+        deadline = int(QDateTime.currentMSecsSinceEpoch()) + PENDING_TTL_MS
         self._pending.append(_Pending(resolve, quiet, deadline, is_poll))
 
     # ── Internals: sending ─────────────────────────────────────────────────────

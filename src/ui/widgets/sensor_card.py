@@ -12,13 +12,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.style import metrics as m
 from ui.style import palette as col
-from ui.style.anim import Fade
+from ui.style.anim import SENSOR_VALUE_FADE_MS, Fade
 
 # ── Sizing / timing constants ─────────────────────────────────────────────────
-_CARD_MIN_W = 100  # minimum card width in pixels
-_CARD_MIN_H = 88  # minimum card height in pixels
-_VAL_FADE_MS = 450  # value label fade-in duration on each new reading
 
 
 class SensorCard(QFrame):
@@ -39,7 +37,7 @@ class SensorCard(QFrame):
         Call :meth:`configure` after ``setupUi()`` to set the per-instance labels.
         """
         super().__init__(parent)
-        self.setMinimumSize(_CARD_MIN_W, _CARD_MIN_H)
+        self.setMinimumSize(m.SENSOR_CARD_MIN_W_PX, m.SENSOR_CARD_MIN_H_PX)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lay = QVBoxLayout(self)
@@ -67,7 +65,7 @@ class SensorCard(QFrame):
         lay.addWidget(self._lbl_unit)
 
         # Fades the value label in whenever set_value() is called.
-        self._val_fade = Fade(self._val, duration=_VAL_FADE_MS)
+        self._val_fade = Fade(self._val, duration=SENSOR_VALUE_FADE_MS)
 
         self._polling_enabled: bool = False
         self._interactive: bool = False

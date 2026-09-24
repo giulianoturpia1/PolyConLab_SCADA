@@ -10,7 +10,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QAbstractSocket, QTcpSocket
 
-_CONNECT_TIMEOUT_MS = 5_000
+from config.network import CONNECT_TIMEOUT_MS
 
 
 class TcpClient(QObject):
@@ -33,7 +33,7 @@ class TcpClient(QObject):
 
         self._timeout = QTimer(self)
         self._timeout.setSingleShot(True)
-        self._timeout.setInterval(_CONNECT_TIMEOUT_MS)
+        self._timeout.setInterval(CONNECT_TIMEOUT_MS)
         self._timeout.timeout.connect(self._on_timeout)
 
     # ── Public API ───────────────────────────────────────────────────────────

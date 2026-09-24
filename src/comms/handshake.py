@@ -24,18 +24,8 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from comms.plc_client import PlcClient
 from comms.protocol import Evt, State
+from config.polling import HANDSHAKE_PROBE_TIMEOUT_MS, HANDSHAKE_SETTLE_MS
 from models import Sensor
-
-# ── Timing constants ─────────────────────────────────────────────────────────
-
-# How long (ms) to wait after sending a transition event before re-querying
-# STATE? to let the PLC's FreeRTOS scheduler process the event and settle.
-_SETTLE_MS = 400
-
-# Overall timeout (ms) for the sensor probe step.  Each sensor query takes
-# at most one SM tick (~50 ms) plus network latency; 6 sensors × ≈100 ms each
-# gives ~600 ms nominal, so 6 s is a generous upper bound.
-_PROBE_TIMEOUT_MS = 6_000
 
 # ── Human-readable sensor labels (Spanish UI) ────────────────────────────────
 
@@ -72,7 +62,7 @@ class PlcHandshake(QObject):
 
         self._probe_timer = QTimer(self)
         self._probe_timer.setSingleShot(True)
-        self._probe_timer.setInterval(_PROBE_TIMEOUT_MS)
+        self._probe_timer.setInterval(HANDSHAKE_PROBE_TIMEOUT_MS)
         self._probe_timer.timeout.connect(self._on_probe_timeout)
 
         # Live STATE? listener, if any, plus an epoch that invalidates in-flight
@@ -186,7 +176,7 @@ class PlcHandshake(QObject):
             if epoch == self._epoch:
                 self._query_state(callback)
 
-        QTimer.singleShot(_SETTLE_MS, go)
+        QTimer.singleShot(HANDSHAKE_SETTLE_MS, go)
 
     # ── State callbacks ────────────────────────────────────────────────────────
 

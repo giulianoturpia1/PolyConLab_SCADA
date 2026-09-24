@@ -10,13 +10,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.style import metrics as m
 from ui.style import palette as col
-from ui.style.anim import Fade
+from ui.style.anim import ACTUATOR_BTN_FADE_MS, Fade
 
 # ── Sizing / timing constants ─────────────────────────────────────────────────
-_BTN_WIDTH_PX = 72  # fixed width for ON / OFF buttons
-_LBL_MIN_WIDTH_PX = 88  # minimum width for the actuator name label
-_BTN_FADE_MS = 400  # confirmation flash duration
 
 # ── Button style helpers ──────────────────────────────────────────────────────
 # Full selector blocks ensure :hover rules are not overridden by the global
@@ -101,16 +99,16 @@ class ActuatorRow(QWidget):
 
         self._lbl = QLabel(label)
         self._lbl.setStyleSheet(f"color:{col.WHITE};font-size:12px;")
-        self._lbl.setMinimumWidth(_LBL_MIN_WIDTH_PX)
+        self._lbl.setMinimumWidth(m.ACTUATOR_LBL_MIN_WIDTH_PX)
 
         self.btn_on = QPushButton(on_text)
         self.btn_on.setObjectName("btn_on")
-        self.btn_on.setFixedWidth(_BTN_WIDTH_PX)
+        self.btn_on.setFixedWidth(m.ACTUATOR_BTN_WIDTH_PX)
         self.btn_on.setEnabled(False)
         self.btn_on.setStyleSheet(_btn_style(False))
 
         self.btn_off = QPushButton(off_text)
-        self.btn_off.setFixedWidth(_BTN_WIDTH_PX)
+        self.btn_off.setFixedWidth(m.ACTUATOR_BTN_WIDTH_PX)
         self.btn_off.setEnabled(False)
         self.btn_off.setStyleSheet(_btn_style_off(False))
 
@@ -122,8 +120,8 @@ class ActuatorRow(QWidget):
         self.btn_off.clicked.connect(lambda: self.activated.emit(False))
 
         # Flash whichever button confirms the new state.
-        self._btn_on_fade = Fade(self.btn_on, duration=_BTN_FADE_MS)
-        self._btn_off_fade = Fade(self.btn_off, duration=_BTN_FADE_MS)
+        self._btn_on_fade = Fade(self.btn_on, duration=ACTUATOR_BTN_FADE_MS)
+        self._btn_off_fade = Fade(self.btn_off, duration=ACTUATOR_BTN_FADE_MS)
 
     def configure(self, label: str, on_text: str = "ON", off_text: str = "OFF") -> None:
         """Override the default label and button texts set in ``__init__``."""

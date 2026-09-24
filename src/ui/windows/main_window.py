@@ -6,6 +6,8 @@ from PySide6.QtWidgets import QFileDialog, QInputDialog, QMainWindow, QMessageBo
 
 from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
+from config.data import EXPORT_DEFAULT_ROWS, EXPORT_MAX_ROWS
+from config.network import DEFAULT_HOST, DEFAULT_PORT
 from models import Device, Sensor
 from ui.actuator_panel import ActuatorPanel
 from ui.main_window_ui import Ui_MainWindow
@@ -13,6 +15,7 @@ from ui.measurement_log import MeasurementLog
 from ui.recovery_action_bar import RecoveryActionBar
 from ui.scada_controller import ScadaController
 from ui.sensor_panel import SensorPanel
+from ui.style import metrics as m
 from ui.style import palette as col
 from ui.temperature_control import TemperatureControl
 from ui.widgets.actuator_row import ActuatorRow
@@ -24,15 +27,10 @@ from ui.windows.settings_dialog import SettingsDialog
 from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
-_DEFAULT_HOST = "192.168.1.1"
-_DEFAULT_PORT = 80
 
 # ── UI sizing constants ───────────────────────────────────────────────────────
-_LOGO_SIZE_PX = 36          # logo scaled to a square of this many pixels
 
 # ── Connection label stylesheet values ───────────────────────────────────────
-_CONN_FONT_PX = 13
-_CONN_MARGIN_LEFT_PX = 8
 
 
 class MainWindow(QMainWindow):
@@ -49,8 +47,8 @@ class MainWindow(QMainWindow):
         self._ui = Ui_MainWindow()
         self._ui.setupUi(self)
 
-        self._host = _DEFAULT_HOST
-        self._port = _DEFAULT_PORT
+        self._host = DEFAULT_HOST
+        self._port = DEFAULT_PORT
 
         self._chart = TemperatureChart(self._ui.chart_view)
         self._log_win = LogWindow(self)
@@ -137,8 +135,8 @@ class MainWindow(QMainWindow):
             return
 
         pixmap = QPixmap(str(_LOGO_PATH)).scaled(
-            _LOGO_SIZE_PX,
-            _LOGO_SIZE_PX,
+            m.LOGO_SIZE_PX,
+            m.LOGO_SIZE_PX,
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
@@ -198,7 +196,7 @@ class MainWindow(QMainWindow):
         """The PLC is connected — paint the indicator green."""
         self._ui.lbl_conn.setText(f"● Conectado  {host}:{port}")
         self._ui.lbl_conn.setStyleSheet(
-            f"color:{col.GREEN};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
+            f"color:{col.GREEN};font-size:{m.CONN_FONT_PX}px;margin-left:{m.CONN_MARGIN_LEFT_PX}px;"
         )
         self._ui.btn_connect.setText("Desconectar")
 
@@ -206,7 +204,7 @@ class MainWindow(QMainWindow):
         """The session is down — paint the disconnected baseline."""
         self._ui.lbl_conn.setText("● Desconectado")
         self._ui.lbl_conn.setStyleSheet(
-            f"color:{col.GRAY};font-size:{_CONN_FONT_PX}px;margin-left:{_CONN_MARGIN_LEFT_PX}px;"
+            f"color:{col.GRAY};font-size:{m.CONN_FONT_PX}px;margin-left:{m.CONN_MARGIN_LEFT_PX}px;"
         )
         self._ui.btn_connect.setText("Conectar")
 
@@ -215,10 +213,11 @@ class MainWindow(QMainWindow):
     def _download_data(self) -> None:
         """Export a configurable number of measurements to CSV on the user's computer.
 
-        Prompts the user for how many measurements to save (default 50).
+        Prompts the user for how many measurements to save (default EXPORT_DEFAULT_ROWS).
         """
-        default_limit = 50
-        limit, ok = QInputDialog.getInt(self, "Cantidad de mediciones", "Número de mediciones a guardar:", default_limit, 1, 100000, 1)
+        limit, ok = QInputDialog.getInt(
+            self, "Cantidad de mediciones", "Número de mediciones a guardar:", EXPORT_DEFAULT_ROWS, 1, EXPORT_MAX_ROWS, 1
+        )
         if not ok:
             return
 

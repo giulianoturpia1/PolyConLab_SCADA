@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QLabel
 
+from ui.style import metrics as m
 from ui.style import palette as col
 from ui.style.anim import Fade, STATE_LABEL_FADE_MS
 
 # ── State label stylesheet values ─────────────────────────────────────────────
-_FONT_PX = 18
-_BORDER_RADIUS_PX = 6
-_PADDING = "14px 8px"
 
 # Placeholder shown while disconnected / before the first state is known.
 _PLACEHOLDER = "--"
@@ -42,8 +40,8 @@ class StateLabel:
         self._label.setText(raw)
         self._label.setStyleSheet(
             f"color:{color};background:{col.PANEL};border:2px solid {color};"
-            f"border-radius:{_BORDER_RADIUS_PX}px;font-size:{_FONT_PX}px;"
-            f"font-weight:bold;padding:{_PADDING};"
+            f"border-radius:{m.STATE_LABEL_RADIUS_PX}px;font-size:{m.STATE_LABEL_FONT_PX}px;"
+            f"font-weight:bold;padding:{m.STATE_LABEL_PADDING};"
         )
         self._fade.play(0.2, 1.0)
 

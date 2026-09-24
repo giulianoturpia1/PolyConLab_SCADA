@@ -25,11 +25,8 @@ from PySide6.QtCore import QObject
 
 from comms.plc_client import PlcClient
 from comms.protocol import Resp
+from config.data import EXPORT_DEFAULT_ROWS, LOG_MAX_ROWS
 from models import Device
-
-# Maximum recorded rows kept in memory, comfortably above the download dialog's
-# 100 000-row maximum (see MainWindow._download_data).
-_MAX_ROWS = 200_000
 
 # CSV column headers, in the exact order written by export_csv(). The first five
 # columns are byte-identical to the legacy TemperatureChart.export_history() output
@@ -81,7 +78,7 @@ class MeasurementLog(QObject):
         """Wire up to *plc*'s status signals and start with an empty, all-unknown log."""
         super().__init__(parent)
         self._plc = plc
-        self._rows: deque[dict[str, object]] = deque(maxlen=_MAX_ROWS)
+        self._rows: deque[dict[str, object]] = deque(maxlen=LOG_MAX_ROWS)
         self._reset_status()
 
         self._plc.actuator_changed.connect(self._on_actuator_changed)
@@ -100,7 +97,7 @@ class MeasurementLog(QObject):
     ) -> None:
         """Append one row: the four temperatures plus the status as it stands right now.
 
-        Oldest rows are dropped once :data:`_MAX_ROWS` is exceeded.
+        Oldest rows are dropped once :data:`config.data.LOG_MAX_ROWS` is exceeded.
         """
         self._rows.append(
             {
@@ -115,7 +112,7 @@ class MeasurementLog(QObject):
             }
         )
 
-    def export_csv(self, path: str | Path, limit: int = 50) -> bool:
+    def export_csv(self, path: str | Path, limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Write the last *limit* recorded rows to *path* as CSV; return False if there are none.
 
         A status column is left as an empty string for any row recorded before the
