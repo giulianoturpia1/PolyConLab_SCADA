@@ -238,7 +238,7 @@ class ScadaController(QObject):
         Fires one SYST:REINIT command per faulted sensor over a snapshot of the
         set (the results mutate it as they arrive).  Re-init is a command, not a
         state event: cards clear as sensors recover, but the PLC stays in SOFT
-        ERROR — the operator then uses Reintentar Chequeo or Aceptar Falla to
+        ERROR — the operator then uses Reintentar Chequeo or Aceptar to
         leave it.
         """
         if not self._faulted:

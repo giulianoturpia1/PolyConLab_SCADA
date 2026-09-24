@@ -270,12 +270,7 @@ QMenu::item:selected {
               <widget class="QPushButton" name="btn_pause">
                <property name="text"><string>Pausar</string></property>
                <property name="enabled"><bool>false</bool></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="btn_resume">
-               <property name="text"><string>Reanudar</string></property>
-               <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>En MANUAL pausa el sistema. En PAUSA el botón pasa a «Reanudar» y retoma la operación.</string></property>
               </widget>
              </item>
              <item>
@@ -288,7 +283,7 @@ Reconecte para iniciar una nueva sesión.</string></property>
              </item>
              <item>
               <widget class="QPushButton" name="btn_ack">
-               <property name="text"><string>Aceptar Falla</string></property>
+               <property name="text"><string>Aceptar</string></property>
                <property name="enabled"><bool>false</bool></property>
                <property name="toolTip"><string>Reconoce la falla y confirma que la condición fue resuelta.
 Si el sistema estaba en MANUAL antes de la falla, vuelve directamente a MANUAL.
@@ -308,7 +303,7 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
                <property name="text"><string>Reinicializar Sensores</string></property>
                <property name="enabled"><bool>false</bool></property>
                <property name="toolTip"><string>Reintenta la inicialización de hardware de cada sensor en falla, sin reiniciar el PLC.
-Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Falla para salir de la falla.</string></property>
+Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar para salir de la falla.</string></property>
               </widget>
              </item>
             </layout>

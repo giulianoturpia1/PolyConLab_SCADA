@@ -41,8 +41,7 @@ Layout and static text in Qt Designer (`assets/ui/main_window.ui`). Runtime beha
 | `btn_ack` | `QPushButton` | Acknowledge fault and proceed to MANUAL |
 | `btn_connect` | `QPushButton` | Connect / Disconnect / Cancel toggle |
 | `btn_estop` | `QPushButton` | Graceful shutdown (EVT:SHUTDOWN + disconnect) |
-| `btn_pause` | `QPushButton` | Send EVT:PAUSE |
-| `btn_resume` | `QPushButton` | Send EVT:UNPAUSE |
+| `btn_pause` | `QPushButton` | Pause/resume: reads "Pausar" and sends EVT:PAUSE in MANUAL; reads "Reanudar" and sends EVT:UNPAUSE in PAUSE |
 | `btn_retry` | `QPushButton` | Retry full sensor checkup |
 | `heater_slider` | `QSlider` | Heater setpoint (synced to spinbox via Qt Designer) |
 | `heater_spinbox` | `QSpinBox` | Heater setpoint (synced to slider via Qt Designer) |

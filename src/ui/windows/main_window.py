@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
             self._ui.btn_temp_control, self._ui.heater_spinbox, self._ui.heater_slider, self._plc, self
         )
         self._recovery_bar = RecoveryActionBar(
-            self._ui.btn_pause, self._ui.btn_resume, self._ui.btn_estop, self._ui.btn_ack, self._ui.btn_retry, self._ui.btn_reinit, self
+            self._ui.btn_pause, self._ui.btn_estop, self._ui.btn_ack, self._ui.btn_retry, self._ui.btn_reinit, self
         )
 
         # The controller owns the state machine and drives the collaborators above.
