@@ -43,26 +43,22 @@ _CSV_HEADER = [
     "Estado",
     "Calefactor",
     "Bomba",
-    "Enfriador",
     "Válvula 1",
-    "Válvula 2",
     "Control Temp",
     "Mezclador",
 ]
 
 # Per-device (on-word, off-word) pair used to render its confirmed boolean status.
-# Heater/pump/chiller/mixer report ON/OFF; the valves report OPEN/CLOSED.
+# Heater/pump/mixer report ON/OFF; the valve reports OPEN/CLOSED.
 _DEVICE_ON_OFF: dict[Device, tuple[str, str]] = {
     Device.HEATER: (Resp.ON, Resp.OFF),
     Device.PUMP: (Resp.ON, Resp.OFF),
-    Device.CHILLER: (Resp.ON, Resp.OFF),
     Device.MIXER: (Resp.ON, Resp.OFF),
     Device.VALVE1: (Resp.OPEN, Resp.CLOSED),
-    Device.VALVE2: (Resp.OPEN, Resp.CLOSED),
 }
 
-# Device columns, in CSV column order (Calefactor, Bomba, Enfriador, Válvula 1, Válvula 2).
-_DEVICE_COLUMNS = (Device.HEATER, Device.PUMP, Device.CHILLER, Device.VALVE1, Device.VALVE2)
+# Device columns, in CSV column order (Calefactor, Bomba, Válvula 1).
+_DEVICE_COLUMNS = (Device.HEATER, Device.PUMP, Device.VALVE1)
 
 # Device columns written after "Control Temp" (Mezclador). Devices added after the CSV
 # layout was published go here, on the right, so existing columns keep their position.

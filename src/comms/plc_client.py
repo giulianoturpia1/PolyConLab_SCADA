@@ -171,10 +171,8 @@ class PlcClient(QObject):
         queries = [
             (Device.HEATER, Cmd.HEAT_STATE),
             (Device.PUMP, Cmd.PUMP_STATE),
-            (Device.CHILLER, Cmd.CHILL_STATE),
             (Device.MIXER, Cmd.MIX_STATE),
             (Device.VALVE1, Cmd.valve_state(1)),
-            (Device.VALVE2, Cmd.valve_state(2)),
         ]
 
         for dev, query in queries:
