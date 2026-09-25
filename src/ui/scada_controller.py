@@ -186,6 +186,10 @@ class ScadaController(QObject):
         plc_state = from_plc(raw)
         previous = self._scada_state
         self._transition(plc_state)
+        if plc_state == previous and STATE_CONTROLS[plc_state].actuator_queries:
+            # Re-read the actuators with every state poll: the FW also switches them on its own
+            # (temperature control, the temperature limit, safe outputs), and the rows must follow.
+            self._actuator_panel.reconcile()
         if previous == ScadaState.PAUSE and plc_state != ScadaState.PAUSE:
             self.log.emit(_RESUME_MESSAGE.get(plc_state, f"El PLC salió de PAUSE al estado «{raw}»."))
         if plc_state == ScadaState.CHECKUP and not self._init_seq.is_running:
@@ -273,9 +277,12 @@ class ScadaController(QObject):
 
         if new_state == previous:
             return
-        if new_state == ScadaState.MANUAL:
+        if STATE_CONTROLS[new_state].actuator_queries:
             self._reconcile_controls()
-        elif previous == ScadaState.MANUAL:
+        else:
+            # The FW rejects actuator queries here: show unknown rather than a stale state.
+            self._actuator_panel.reset()
+        if previous == ScadaState.MANUAL:
             self._temp_control.clear()
 
     def _reconcile_controls(self) -> None:

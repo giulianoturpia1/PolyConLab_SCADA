@@ -123,6 +123,9 @@ class ActuatorRow(QWidget):
         self._btn_on_fade = Fade(self.btn_on, duration=ACTUATOR_BTN_FADE_MS)
         self._btn_off_fade = Fade(self.btn_off, duration=ACTUATOR_BTN_FADE_MS)
 
+        # Last state painted: True/False once the PLC confirmed one, None while unknown.
+        self._state: bool | None = None
+
     def configure(self, label: str, on_text: str = "ON", off_text: str = "OFF") -> None:
         """Override the default label and button texts set in ``__init__``."""
         self._lbl.setText(label)
@@ -137,8 +140,12 @@ class ActuatorRow(QWidget):
         """Transition the row to ON or OFF state.
 
         Applies persistent selected/unselected styling to both buttons, then
-        fades in the button that confirmed the new state.
+        fades in the button that confirmed the new state. A repeat of the state
+        already shown (the periodic re-query) changes nothing, so it does not flash.
         """
+        if self._state is active:
+            return
+        self._state = active
         self.btn_on.setStyleSheet(_btn_style(active))
         self.btn_off.setStyleSheet(_btn_style_off(active))
 
@@ -148,6 +155,12 @@ class ActuatorRow(QWidget):
         else:
             self._btn_on_fade.set_opacity(1.0)
             self._btn_off_fade.play(0.1, 1.0)
+
+    def set_unknown(self) -> None:
+        """Show that the PLC's state is unknown: neither button highlighted."""
+        self._state = None
+        self.btn_on.setStyleSheet(_btn_style(False))
+        self.btn_off.setStyleSheet(_btn_style_off(True))
 
     def set_enabled_buttons(self, enabled: bool) -> None:
         """Enable or disable both action buttons together."""

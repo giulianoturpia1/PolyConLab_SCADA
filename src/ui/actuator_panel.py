@@ -49,9 +49,10 @@ class ActuatorPanel(QObject):
             row.set_enabled_buttons(enabled)
 
     def reset(self) -> None:
-        """Clear any stale ON styling — e.g. on disconnect."""
+        """Show every row as unknown — on disconnect, or in a state where the PLC does not answer
+        actuator queries. The SCADA never paints a state the PLC did not report."""
         for row in self._rows.values():
-            row.set_active(False)
+            row.set_unknown()
 
     # ── Private slots ──────────────────────────────────────────────────────────
 
