@@ -161,6 +161,7 @@ class MainWindow(QMainWindow):
         self._log_win.message_send.connect(self._on_log_message)
 
         # ── Log routing from the collaborators ──────────────────────────────────
+        self._sensor_panel.log.connect(self.log)
         self._actuator_panel.log.connect(self.log)
         self._temp_control.log.connect(self.log)
         self._controller.log.connect(self.log)

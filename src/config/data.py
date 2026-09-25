@@ -1,4 +1,4 @@
-"""Measurement log, CSV export and temperature chart settings."""
+"""Measurement log, CSV export, temperature chart and bath-limit display settings."""
 
 from __future__ import annotations
 
@@ -15,3 +15,8 @@ CHART_WINDOW_S = 300
 # Default Y-axis bounds (°C) of the temperature chart.
 CHART_TEMP_MIN_C = 0
 CHART_TEMP_MAX_C = 100
+
+# Bath temperature (°C) at which the PLC turns the heater off, and the reading it must drop below before
+# the heater may come back on. They mirror FW config::kMaxBathTempC / kBathTempClearC: keep them in sync.
+BATH_TEMP_LIMIT_C = 65.0
+BATH_TEMP_CLEAR_C = 60.0

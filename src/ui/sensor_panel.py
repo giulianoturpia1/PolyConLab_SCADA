@@ -13,10 +13,11 @@ Responsibilities owned here:
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 
 from comms.plc_client import PlcClient
 from comms.protocol import parse_value
+from config.data import BATH_TEMP_CLEAR_C, BATH_TEMP_LIMIT_C
 from models import Sensor
 from ui.measurement_log import MeasurementLog
 from ui.style import palette as col
@@ -33,6 +34,9 @@ class SensorPanel(QObject):
     Constructed after the card dict is built in ``_configure_widgets`` so the
     cards are fully labelled before signals are wired.
     """
+
+    #: Human-readable message to surface in the log window.
+    log = Signal(str)
 
     def __init__(
         self,
@@ -55,6 +59,8 @@ class SensorPanel(QObject):
         # Enabled chart sensors currently in a fault state; excluded from the
         # "all reported" gate so one faulty sensor cannot stall the whole chart.
         self._faulted_chart_sensors: set[Sensor] = set()
+        # Bath reading at/over the PLC's heater limit and not yet back under the clear threshold.
+        self._over_limit = False
 
         # Wire card toggled signals to poll enable/disable and chart visibility.
         for sensor, card in self._cards.items():
@@ -141,6 +147,7 @@ class SensorPanel(QObject):
         self._enabled_chart_sensors.clear()
         self._temp_batch.clear()
         self._faulted_chart_sensors.clear()
+        self._over_limit = False
         self._chart.reset_visibility()
         for card in self._cards.values():
             card.set_value("--")
@@ -164,13 +171,27 @@ class SensorPanel(QObject):
 
     def _on_sensor_updated(self, sensor: Sensor, value: str) -> None:
         """Show a fresh reading on its card; push to the chart once every enabled sensor has reported or faulted."""
-        self._cards[sensor].set_value(value)
-
         temp = parse_value(value)
+        over_limit = sensor == Sensor.TEMP_BATH and temp is not None and self._track_bath_limit(temp)
+        self._cards[sensor].set_value(value, col.ORANGE if over_limit else col.WHITE)
+
         if temp is not None and sensor in self._enabled_chart_sensors:
             self._faulted_chart_sensors.discard(sensor)  # a reading means it recovered
             self._temp_batch[sensor] = temp
             self._maybe_push_chart()
+
+    def _track_bath_limit(self, temp: float) -> bool:
+        """Follow the PLC's heater limit on the bath reading and log each crossing; True while over it."""
+        if not self._over_limit and temp >= BATH_TEMP_LIMIT_C:
+            self._over_limit = True
+            self.log.emit(
+                f"Temperatura de camisa {temp:.1f} °C: alcanzó el límite de {BATH_TEMP_LIMIT_C:g} °C. "
+                f"El PLC apaga el calentador hasta que baje de {BATH_TEMP_CLEAR_C:g} °C."
+            )
+        elif self._over_limit and temp < BATH_TEMP_CLEAR_C:
+            self._over_limit = False
+            self.log.emit(f"Temperatura de camisa bajo {BATH_TEMP_CLEAR_C:g} °C: el PLC vuelve a permitir el calentador.")
+        return self._over_limit
 
     def _on_sensor_fault(self, sensor: Sensor) -> None:
         """Mark a card as ERR on a runtime poll fault; let the other series still flush."""
