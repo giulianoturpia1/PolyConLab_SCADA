@@ -17,7 +17,6 @@ from comms.protocol import Cmd
 from ui.style import metrics as m
 from ui.style import palette as col
 
-# Corner rounding for the toggle button, in px.
 
 # Button style while control was last requested ON (in MANUAL).
 _ACTIVE_STYLE = (

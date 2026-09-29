@@ -1,7 +1,7 @@
 """SensorPanel — manages the six sensor display cards and chart integration.
 
-Centralises every sensor-display concern so :class:`~ui.main_window.MainWindow`
-stays focused on connection lifecycle and FSM state management.
+Centralises every sensor-display concern so neither the window nor
+:class:`~ui.scada_controller.ScadaController` touches the cards directly.
 
 Responsibilities owned here:
 * Per-sensor card value and fault display

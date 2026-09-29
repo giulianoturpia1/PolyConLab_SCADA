@@ -78,7 +78,7 @@ class TcpClient(QObject):
 
     def _on_timeout(self) -> None:
         self._socket.abort()
-        self.error.emit("Tiempo de conexión agotado (5 s)")
+        self.error.emit(f"Tiempo de conexión agotado ({CONNECT_TIMEOUT_MS / 1000:g} s)")
 
     def _on_error(self, _: QAbstractSocket.SocketError) -> None:
         """Forward the socket error as a human-readable string."""

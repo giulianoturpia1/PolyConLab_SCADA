@@ -14,8 +14,6 @@ from ui.style import metrics as m
 from ui.style import palette as col
 from ui.style.anim import ACTUATOR_BTN_FADE_MS, Fade
 
-# ── Sizing / timing constants ─────────────────────────────────────────────────
-
 # ── Button style helpers ──────────────────────────────────────────────────────
 # Full selector blocks ensure :hover rules are not overridden by the global
 # stylesheet when setStyleSheet() is called per-widget.

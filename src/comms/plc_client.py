@@ -280,10 +280,6 @@ class PlcClient(QObject):
         """Start the periodic STATE? poll (interval = ``config.polling.STATE_POLL_INTERVAL_MS``)."""
         self._state_poll_timer.start()
 
-    def stop_state_polling(self) -> None:
-        """Stop the periodic STATE? poll."""
-        self._state_poll_timer.stop()
-
     def _request(self, line: str, resolve: Callable[[str], bool], quiet: bool = False, is_poll: bool = False) -> bool:
         """Queue a command and the resolver for its reply; write it now if a PLC command slot is free.
 

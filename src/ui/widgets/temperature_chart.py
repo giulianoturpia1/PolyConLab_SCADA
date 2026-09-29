@@ -6,7 +6,7 @@ the last :data:`config.data.CHART_WINDOW_S` of readings and keeps no history
 of its own — see :class:`~ui.measurement_log.MeasurementLog` for recording and CSV
 export of measurements.
 Series visibility is driven externally via :meth:`set_series_visible` — each
-temperature SensorCard click in MainWindow enables or disables its series.
+temperature card click (through SensorPanel) enables or disables its series.
 """
 
 from __future__ import annotations

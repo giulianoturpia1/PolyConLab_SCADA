@@ -28,15 +28,11 @@ from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
 
-# ── UI sizing constants ───────────────────────────────────────────────────────
-
-# ── Connection label stylesheet values ───────────────────────────────────────
-
 
 class MainWindow(QMainWindow):
-    """Top-level window: builds the UI, wires the collaborators, and owns the menu,
+    """Top-level window: builds the UI, wires the collaborators, and owns the menu.
 
-    the log/CSV export, and the connection-indicator chrome.  All SCADA decision
+    It also owns the log/CSV export and the connection-indicator chrome.  All SCADA decision
     logic lives in :class:`~ui.scada_controller.ScadaController`; the panels own
     their widgets; this class only composes and paints its own header.
     """
@@ -148,6 +144,7 @@ class MainWindow(QMainWindow):
         # ── Menu ──────────────────────────────────────────────────────────────
         self._ui.action_log.triggered.connect(self._toggle_log)
         self._ui.action_connection.triggered.connect(self._open_settings)
+        # Through a lambda: triggered(bool) would otherwise pass its checked flag as default_limit.
         self._ui.action_download.triggered.connect(lambda: self._download_data())
         self._ui.action_link_stats.triggered.connect(self._show_link_stats)
         self._ui.btn_reset_measurements.clicked.connect(self._reset_measurements)

@@ -16,8 +16,6 @@ from ui.style import metrics as m
 from ui.style import palette as col
 from ui.style.anim import SENSOR_VALUE_FADE_MS, Fade
 
-# ── Sizing / timing constants ─────────────────────────────────────────────────
-
 
 class SensorCard(QFrame):
     """Compact card showing a title, current value and unit.

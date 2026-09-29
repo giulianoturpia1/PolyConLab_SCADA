@@ -237,7 +237,7 @@ class ScadaController(QObject):
         self._init_seq.reprobe_sensors()
 
     def _on_reinit(self) -> None:
-        """Re-initialise every currently faulted sensor on the PLC. No state Change occurs.
+        """Re-initialise every currently faulted sensor on the PLC. No state change occurs.
 
         Fires one SYST:REINIT command per faulted sensor over a snapshot of the
         set (the results mutate it as they arrive).  Re-init is a command, not a
@@ -267,9 +267,10 @@ class ScadaController(QObject):
     def _transition(self, new_state: ScadaState) -> None:
         """Move to a new SCADA state, apply control permissions, and reconcile on change.
 
-        On entry to MANUAL every control is re-synced from the PLC (never
-        assumed); on exit from MANUAL the temperature-control indicator is
-        cleared, because the FW disables that control outside MANUAL.
+        On entry to a state where the FW answers actuator queries the rows are
+        re-read from the PLC (never assumed); on exit from MANUAL the
+        temperature-control indicator is cleared, because the FW disables that
+        control outside MANUAL.
         """
         previous = self._scada_state
         self._scada_state = new_state
@@ -278,20 +279,12 @@ class ScadaController(QObject):
         if new_state == previous:
             return
         if STATE_CONTROLS[new_state].actuator_queries:
-            self._reconcile_controls()
+            self._actuator_panel.reconcile()
         else:
             # The FW rejects actuator queries here: show unknown rather than a stale state.
             self._actuator_panel.reset()
         if previous == ScadaState.MANUAL:
             self._temp_control.clear()
-
-    def _reconcile_controls(self) -> None:
-        """Re-sync every control from the PLC on entry to MANUAL.
-
-        Delegates to the panels, which repaint only from the PLC's replies, so
-        the UI reflects the PLC and never a SCADA-side assumption.
-        """
-        self._actuator_panel.reconcile()
 
     def _apply_state_gating(self) -> None:
         """Enable or disable controls by looking up the current state in STATE_CONTROLS."""

@@ -1,17 +1,10 @@
 """Measurement log: records temperature readings alongside confirmed system status.
 
-Replaces the private history :class:`~ui.widgets.temperature_chart.TemperatureChart`
-used to keep for CSV export. Unlike the chart, this module can see system status —
-not because the chart's history was wrong, but because recording status alongside
-temperature readings is a job that belongs to the log, not to a plotting widget.
-it listens to :class:`~comms.plc_client.PlcClient` actuator, temp-control and FSM
-state signals and stamps every recorded row with the last confirmed value of each.
-
-Actuator and temp-control status are event-driven: the PLC confirms a new state only
-when it changes, and nothing polls the actuators periodically (see PlcClient). Until
-the first confirmation arrives for a given session, that status is unknown — recording
-it as OFF/CLOSED would be assuming a PLC state this codebase never assumes, so an
-unknown status is written to the CSV as an empty cell instead.
+Listens to :class:`~comms.plc_client.PlcClient` actuator, temp-control and FSM state
+signals and stamps every recorded row with the last confirmed value of each. Until the
+PLC first confirms a value in a session it is unknown — recording it as OFF/CLOSED would
+be assuming a PLC state this codebase never assumes — so an unknown status is written
+to the CSV as an empty cell instead.
 """
 
 from __future__ import annotations
@@ -28,9 +21,8 @@ from comms.protocol import Resp
 from config.data import EXPORT_DEFAULT_ROWS, LOG_MAX_ROWS
 from models import Device
 
-# CSV column headers, in the exact order written by export_csv(). The first five
-# columns are byte-identical to the legacy TemperatureChart.export_history() output
-# so existing consumers of the file keep working; the rest are appended on the right.
+# CSV column headers, in the exact order written by export_csv(). New columns are
+# appended on the right so existing consumers of the file keep working.
 _CSV_HEADER = [
     "Timestamp",
     "T. Entrada",
@@ -162,7 +154,7 @@ class MeasurementLog(QObject):
 
     def _reset_status(self) -> None:
         """Reset the confirmed-status snapshot to all-unknown."""
-        self._actuator_state: dict[Device, bool | None] = {dev: None for dev in Device}
+        self._actuator_state: dict[Device, bool | None] = dict.fromkeys(Device)
         self._temp_control: bool | None = None
         self._fsm_state: str | None = None
 
