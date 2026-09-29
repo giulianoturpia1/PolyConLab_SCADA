@@ -16,21 +16,28 @@ ACTION_BTN_FADE_MS = 500    # action button group fade-in on connect
 ACTUATOR_BTN_FADE_MS = 400  # actuator ON/OFF button confirmation flash
 SENSOR_VALUE_FADE_MS = 450  # sensor card value fade-in on each new reading
 
+# ── Opacity each fade starts from (every fade ends fully opaque) ─────────────
+OPAQUE = 1.0
+STATE_LABEL_FADE_FROM = 0.2
+ACTION_BTN_FADE_FROM = 0.0
+ACTUATOR_BTN_FADE_FROM = 0.1
+SENSOR_VALUE_FADE_FROM = 0.15
+
 
 class Fade:
     """Opacity fade-in controller bound to a single widget."""
 
-    def __init__(self, widget: QWidget, duration: int = 400) -> None:
+    def __init__(self, widget: QWidget, duration: int) -> None:
         """Attach an opacity effect + animation to ``widget`` (starts fully opaque)."""
         self._effect = QGraphicsOpacityEffect(widget)
-        self._effect.setOpacity(1.0)
+        self._effect.setOpacity(OPAQUE)
         widget.setGraphicsEffect(self._effect)
 
         self._anim = QPropertyAnimation(self._effect, b"opacity", widget)
         self._anim.setDuration(duration)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
-    def play(self, start: float = 0.1, end: float = 1.0) -> None:
+    def play(self, start: float, end: float = OPAQUE) -> None:
         """Restart the fade from ``start`` opacity to ``end``."""
         self._anim.stop()
         self._anim.setStartValue(start)

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QLabel
 
 from ui.style import metrics as m
 from ui.style import palette as col
-from ui.style.anim import Fade, STATE_LABEL_FADE_MS
+from ui.style.anim import STATE_LABEL_FADE_FROM, STATE_LABEL_FADE_MS, Fade
 
 # ── State label stylesheet values ─────────────────────────────────────────────
 
@@ -39,11 +39,11 @@ class StateLabel:
         color = col.STATE_COLOR.get(raw, col.GRAY)
         self._label.setText(raw)
         self._label.setStyleSheet(
-            f"color:{color};background:{col.PANEL};border:2px solid {color};"
+            f"color:{color};background:{col.PANEL};border:{m.THICK_BORDER_PX}px solid {color};"
             f"border-radius:{m.STATE_LABEL_RADIUS_PX}px;font-size:{m.STATE_LABEL_FONT_PX}px;"
             f"font-weight:bold;padding:{m.STATE_LABEL_PADDING};"
         )
-        self._fade.play(0.2, 1.0)
+        self._fade.play(STATE_LABEL_FADE_FROM)
 
     def reset(self) -> None:
         """Reset to the disconnected placeholder ("--")."""

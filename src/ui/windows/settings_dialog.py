@@ -35,14 +35,14 @@ class SettingsDialog(QDialog):
             QDialog, QWidget {{
                 background-color: {col.BG};
                 color: {col.WHITE};
-                font-size: 13px;
+                font-size: {m.DIALOG_FONT_PX}px;
             }}
             QLineEdit, QSpinBox {{
                 background-color: {col.PANEL};
                 color: {col.WHITE};
-                border: 1px solid {col.BORDER};
-                border-radius: 4px;
-                padding: 4px 8px;
+                border: {m.BORDER_PX}px solid {col.BORDER};
+                border-radius: {m.CONTROL_RADIUS_PX}px;
+                padding: {m.INPUT_PADDING};
             }}
             QLineEdit:focus, QSpinBox:focus {{
                 border-color: {col.BLUE};
@@ -50,28 +50,28 @@ class SettingsDialog(QDialog):
             QSpinBox::up-button, QSpinBox::down-button {{
                 background: {col.BORDER};
                 border: none;
-                width: 16px;
+                width: {m.SETTINGS_SPIN_BUTTON_W_PX}px;
             }}
             QPushButton {{
                 background-color: {col.PANEL};
                 color: {col.WHITE};
-                border: 1px solid {col.BORDER};
-                border-radius: 4px;
-                padding: 6px 14px;
+                border: {m.BORDER_PX}px solid {col.BORDER};
+                border-radius: {m.CONTROL_RADIUS_PX}px;
+                padding: {m.SETTINGS_BUTTON_PADDING};
             }}
-            QPushButton:hover {{ background-color: #353A47; border-color: {col.BLUE}; }}
-            QPushButton:pressed {{ background-color: #23272E; }}
+            QPushButton:hover {{ background-color: {col.PANEL_HOVER}; border-color: {col.BLUE}; }}
+            QPushButton:pressed {{ background-color: {col.PRESSED}; }}
         """)
         self._build_ui(host, port, period_ms)
 
     def _build_ui(self, host: str, port: int, period_ms: int) -> None:
         """Create the IP/port/sampling-period form and the Accept/Cancel button box."""
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 12)
-        root.setSpacing(12)
+        root.setContentsMargins(*m.SETTINGS_MARGINS)
+        root.setSpacing(m.SETTINGS_SPACING_PX)
 
         form = QFormLayout()
-        form.setSpacing(8)
+        form.setSpacing(m.SETTINGS_FORM_SPACING_PX)
 
         self._inp_host = QLineEdit(host)
         self._inp_host.setPlaceholderText(DEFAULT_HOST)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QAbstractButton
 
-from ui.style.anim import ACTION_BTN_FADE_MS, Fade
+from ui.style.anim import ACTION_BTN_FADE_FROM, ACTION_BTN_FADE_MS, OPAQUE, Fade
 
 # Labels of the combined pause/resume button, which follows the PLC state.
 _PAUSE_TEXT = "Pausar"
@@ -87,9 +87,9 @@ class RecoveryActionBar(QObject):
     def fade_in(self) -> None:
         """Fade all buttons in — on connection established."""
         for fade in self._fades:
-            fade.play(0.0, 1.0)
+            fade.play(ACTION_BTN_FADE_FROM)
 
     def reset_fade(self) -> None:
         """Restore full opacity — on disconnect."""
         for fade in self._fades:
-            fade.set_opacity(1.0)
+            fade.set_opacity(OPAQUE)
