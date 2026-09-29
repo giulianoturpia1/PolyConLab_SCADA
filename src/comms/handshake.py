@@ -26,18 +26,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from comms.plc_client import PlcClient
 from comms.protocol import Evt, State
 from config.polling import HANDSHAKE_PROBE_TIMEOUT_MS, HANDSHAKE_SETTLE_MS, PENDING_TTL_MS
-from models import Sensor
-
-# ── Human-readable sensor labels (Spanish UI) ────────────────────────────────
-
-_SENSOR_LABEL: dict[Sensor, str] = {
-    Sensor.TEMP_IN: "T. Entrada",
-    Sensor.TEMP_OUT: "T. Salida",
-    Sensor.TEMP_BATH: "T. Camisa",
-    Sensor.TEMP_MIX: "T. Mezcla",
-    Sensor.FLOW: "Caudal",
-    Sensor.LEVEL: "Nivel",
-}
+from models import SENSOR_LABEL, Sensor
 
 
 class PlcHandshake(QObject):
@@ -261,7 +250,7 @@ class PlcHandshake(QObject):
         for sensor, ok in results.items():
             self.sensor_result.emit(sensor, ok)
 
-        failed = [_SENSOR_LABEL[s] for s, ok in results.items() if not ok]
+        failed = [SENSOR_LABEL[s] for s, ok in results.items() if not ok]
 
         if failed:
             names = ", ".join(failed)

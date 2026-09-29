@@ -19,16 +19,14 @@ from PySide6.QtCore import QObject
 from comms.plc_client import PlcClient
 from comms.protocol import Resp
 from config.data import EXPORT_DEFAULT_ROWS, LOG_MAX_ROWS
-from models import Device
+from models import SENSOR_LABEL, Device, Sensor
 
 # CSV column headers, in the exact order written by export_csv(). New columns are
 # appended on the right so existing consumers of the file keep working.
+_TEMP_COLUMNS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP_MIX)
 _CSV_HEADER = [
     "Timestamp",
-    "T. Entrada",
-    "T. Salida",
-    "T. Camisa",
-    "T. Mezcla",
+    *(SENSOR_LABEL[s] for s in _TEMP_COLUMNS),
     "Estado",
     "Calefactor",
     "Bomba",
@@ -94,10 +92,10 @@ class MeasurementLog(QObject):
         self._rows.append(
             {
                 "timestamp": datetime.now().isoformat(),
-                "T. Entrada": tin,
-                "T. Salida": tout,
-                "T. Camisa": tcam,
-                "T. Mezcla": tmez,
+                Sensor.TEMP_IN: tin,
+                Sensor.TEMP_OUT: tout,
+                Sensor.TEMP_BATH: tcam,
+                Sensor.TEMP_MIX: tmez,
                 "state": self._fsm_state,
                 "actuators": dict(self._actuator_state),
                 "temp_control": self._temp_control,
@@ -163,10 +161,7 @@ class MeasurementLog(QObject):
         actuators: dict[Device, bool | None] = row["actuators"]  # type: ignore[assignment]
         cells = [
             row["timestamp"],
-            self._format_temp(row["T. Entrada"]),
-            self._format_temp(row["T. Salida"]),
-            self._format_temp(row["T. Camisa"]),
-            self._format_temp(row["T. Mezcla"]),
+            *(self._format_temp(row[s]) for s in _TEMP_COLUMNS),
             row["state"] or "",
         ]
         cells.extend(self._format_devices(actuators, _DEVICE_COLUMNS))

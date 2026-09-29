@@ -8,7 +8,7 @@ from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
 from config.data import EXPORT_DEFAULT_ROWS, EXPORT_MAX_ROWS
 from config.network import DEFAULT_HOST, DEFAULT_PORT
-from models import Device, Sensor
+from models import SENSOR_LABEL, SENSOR_UNIT, Device, Sensor
 from ui.actuator_panel import ActuatorPanel
 from ui.main_window_ui import Ui_MainWindow
 from ui.measurement_log import MeasurementLog
@@ -87,13 +87,6 @@ class MainWindow(QMainWindow):
 
     def _configure_widgets(self) -> None:
         """Set labels on promoted widgets and build the reference dicts for the panels."""
-        self._ui.card_tin.configure("T. Entrada", "°C")
-        self._ui.card_tout.configure("T. Salida", "°C")
-        self._ui.card_tcam.configure("T. Camisa", "°C")
-        self._ui.card_tmez.configure("T. Mezcla", "°C")
-        self._ui.card_flow.configure("Caudal", "L/min")
-        self._ui.card_lvl.configure("Nivel", "")
-
         self._ui.row_heater.configure("Calentador")
         self._ui.row_pump.configure("Bomba")
         self._ui.row_mixer.configure("Mezclador")
@@ -116,6 +109,8 @@ class MainWindow(QMainWindow):
             Sensor.FLOW: self._ui.card_flow,
             Sensor.LEVEL: self._ui.card_lvl,
         }
+        for sensor, card in self._cards.items():
+            card.configure(SENSOR_LABEL[sensor], SENSOR_UNIT[sensor])
 
         # Owns the FSM state label: text, colour, and fade on every change.
         self._state_label = StateLabel(self._ui.lbl_state)

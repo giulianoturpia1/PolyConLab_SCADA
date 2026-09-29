@@ -18,15 +18,16 @@ from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
 
 from config.data import CHART_TEMP_MAX_C, CHART_TEMP_MIN_C, CHART_WINDOW_S
+from models import SENSOR_LABEL, Sensor
 from ui.style import metrics as m
 from ui.style import palette as col
 
 # (name, color) — fixed order: tin, tout, tcam, tmez
 _SERIES_CFG = [
-    ("T. Entrada", col.BLUE),
-    ("T. Salida", col.GREEN),
-    ("T. Camisa", col.ORANGE),
-    ("T. Mezcla", col.RED),
+    (SENSOR_LABEL[Sensor.TEMP_IN], col.BLUE),
+    (SENSOR_LABEL[Sensor.TEMP_OUT], col.GREEN),
+    (SENSOR_LABEL[Sensor.TEMP_BATH], col.ORANGE),
+    (SENSOR_LABEL[Sensor.TEMP_MIX], col.RED),
 ]
 
 
