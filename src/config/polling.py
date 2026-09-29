@@ -4,13 +4,12 @@ from __future__ import annotations
 
 # Default sensor sampling period (ms): one full round of MEAS queries per period. The operator
 # changes it at runtime from Configuración, within the bounds below.
-SENSOR_POLL_INTERVAL_MS = 1_000
+SENSOR_POLL_INTERVAL_MS = 2_000
 
-# Bounds and step of the sampling-period field in the settings dialog. The floor is a hard
-# sanity limit (one firmware App tick), deliberately below the recommended minimum so a bench
-# test can probe where the link actually breaks.
-SAMPLE_PERIOD_MIN_MS = 100
-SAMPLE_PERIOD_MAX_MS = 60_000
+# Bounds and step of the sampling-period field in the settings dialog. The floor keeps every
+# round inside what the PLC link sustains with margin (see recommended_min_period_ms).
+SAMPLE_PERIOD_MIN_MS = 500
+SAMPLE_PERIOD_MAX_MS = 10_000
 SAMPLE_PERIOD_STEP_MS = 50
 
 # Commands the SCADA lets wait for a reply at once. Mirrors the firmware's

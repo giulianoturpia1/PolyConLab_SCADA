@@ -89,9 +89,12 @@ class SettingsDialog(QDialog):
         self._inp_period.setValue(period_ms)
         form.addRow("Período de muestreo:", self._inp_period)
 
-        # Below the recommended minimum is allowed (bench testing) but flagged.
+        # Warning shown only while the period is below the recommended minimum. With the current
+        # bounds the field cannot go that low, so it appears only if those values ever change.
+        self._form = form
         self._lbl_period_hint = QLabel()
         self._lbl_period_hint.setWordWrap(True)
+        self._lbl_period_hint.setStyleSheet(f"color:{col.ORANGE};font-size:{m.SETTINGS_HINT_FONT_PX}px;")
         form.addRow("", self._lbl_period_hint)
         self._inp_period.valueChanged.connect(self._update_period_hint)
         self._update_period_hint(period_ms)
@@ -120,10 +123,9 @@ class SettingsDialog(QDialog):
     # ── Internals ────────────────────────────────────────────────────────────
 
     def _update_period_hint(self, period_ms: int) -> None:
-        """Show the recommended minimum; turn the hint orange when the period is below it."""
+        """Show the warning row only while the period is below the recommended minimum."""
         below = period_ms < self._recommended_min_ms
         self._lbl_period_hint.setText(
-            f"Mínimo recomendado: {self._recommended_min_ms} ms"
-            + (" — por debajo, el PLC puede no responder a tiempo." if below else ".")
+            f"Por debajo del mínimo recomendado ({self._recommended_min_ms} ms): el PLC puede no responder a tiempo."
         )
-        self._lbl_period_hint.setStyleSheet(f"color:{col.ORANGE if below else col.GRAY};font-size:{m.SETTINGS_HINT_FONT_PX}px;")
+        self._form.setRowVisible(self._lbl_period_hint, below)
