@@ -329,6 +329,8 @@ class PlcClient(QObject):
 
     def _poll_sensors(self) -> None:
         """Query each enabled sensor once. Skips a round while the previous one is still draining."""
+        # Replies only expire when something arrives; if the PLC went silent, this tick does it.
+        self._expire_overdue(self._now_ms())
         if self._polls_outstanding > 0:
             # The PLC has not answered the previous round yet: it is not keeping up with this period.
             self._stats.on_round_skipped()
@@ -361,21 +363,7 @@ class PlcClient(QObject):
         now = self._now_ms()
         if error_code(line) == ErrCode.BUSY:
             self._stats.on_busy()
-        dropped_any = False
-        # Only written commands can time out; the head is always written when anything is.
-        while self._pending and self._pending[0].sent and self._pending[0].deadline_ms <= now:
-            # A reply was lost: abandoning the entry keeps the queue moving instead of letting every
-            # later reply be offered to a resolver that will never match. A dropped poll must also be
-            # uncounted, or _poll_sensors would skip every round from here on.
-            dropped = self._pending.popleft()
-            dropped_any = True
-            self._stats.on_timeout()
-            if dropped.is_poll and self._polls_outstanding > 0:
-                self._polls_outstanding -= 1
-            if not self._pending:
-                self._polls_outstanding = 0
-        if dropped_any:
-            self._pump()
+        self._expire_overdue(now)
 
         if self._pending and self._pending[0].sent:
             head = self._pending[0]
@@ -393,6 +381,28 @@ class PlcClient(QObject):
             # The oldest pending command did not claim this line: it arrived late or out of order.
             self._stats.on_unmatched()
         self.line_received.emit(line)
+
+    def _expire_overdue(self, now: int) -> None:
+        """Drop commands whose reply is overdue, then write any commands that were held back.
+
+        Runs on every received line and on every sampling tick, so a PLC that stops answering
+        altogether still frees the queue instead of leaving every later round skipped.
+        """
+        dropped_any = False
+        # Only written commands can time out; the head is always written when anything is.
+        while self._pending and self._pending[0].sent and self._pending[0].deadline_ms <= now:
+            # A reply was lost: abandoning the entry keeps the queue moving instead of letting every
+            # later reply be offered to a resolver that will never match. A dropped poll must also be
+            # uncounted, or _poll_sensors would skip every round from here on.
+            dropped = self._pending.popleft()
+            dropped_any = True
+            self._stats.on_timeout()
+            if dropped.is_poll and self._polls_outstanding > 0:
+                self._polls_outstanding -= 1
+            if not self._pending:
+                self._polls_outstanding = 0
+        if dropped_any:
+            self._pump()
 
     @staticmethod
     def _resolve_raw(line: str) -> bool:
