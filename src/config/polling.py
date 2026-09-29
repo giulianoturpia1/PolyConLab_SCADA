@@ -16,14 +16,17 @@ SAMPLE_PERIOD_STEP_MS = 50
 # Commands the SCADA lets wait for a reply at once. Mirrors the firmware's
 # config::kMaxInFlightCommands: a command sent while that many are unanswered is refused with
 # -106 BUSY, so further commands are held here until a reply frees a slot. Keep in sync.
-MAX_IN_FLIGHT_COMMANDS = 4
+MAX_IN_FLIGHT_COMMANDS = 8
 
-# Firmware ingest rate the recommended minimum period is derived from: the FW reads
-# config::kMaxLinesPerPollTick (4) lines every config::kAppTaskPeriodMs (100 ms). Keep in sync.
-FW_LINES_PER_SECOND = 40
+# Firmware task periods the recommended minimum period is derived from: config::kAppTaskPeriodMs
+# and config::kStateMachineTaskPeriodMs. A whole round goes out as one batch, so its worst case is
+# one round trip: up to one App tick to read the query and one SM tick to dispatch it, then one SM
+# tick to collect the reply and one App tick to write it. Keep in sync.
+FW_APP_TICK_MS = 20
+FW_SM_TICK_MS = 50
 
-# Margin over the bare line budget of one round: the STATE? poll, actuator queries and the
-# thermocouple's averaged reads share the same link and firmware ticks.
+# Margin over that worst-case round trip: the STATE? poll, actuator queries and Wi-Fi latency
+# share the same link and firmware ticks.
 SAMPLE_PERIOD_HEADROOM = 2.0
 
 # FSM state label refresh cadence (ms): one STATE? query per interval.

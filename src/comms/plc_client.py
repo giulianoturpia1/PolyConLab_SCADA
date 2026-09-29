@@ -19,7 +19,8 @@ from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 from comms.link_stats import LinkStats
 from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Evt, Resp, error_code, is_error, parse_value
 from config.polling import (
-    FW_LINES_PER_SECOND,
+    FW_APP_TICK_MS,
+    FW_SM_TICK_MS,
     LINK_STATS_WINDOW,
     MAX_IN_FLIGHT_COMMANDS,
     PENDING_TTL_MS,
@@ -143,11 +144,12 @@ class PlcClient(QObject):
     def recommended_min_period_ms() -> int:
         """Fastest period the firmware is expected to sustain with every sensor enabled.
 
-        One round is one line per sensor; the firmware ingests FW_LINES_PER_SECOND lines, and
-        SAMPLE_PERIOD_HEADROOM leaves room for the state/actuator queries sharing the link.
-        An estimate — the bench test with :meth:`link_stats_summary` gives the real limit.
+        A whole round fits in the firmware's in-flight window, so it costs one worst-case round
+        trip (two App ticks and two SM ticks), and SAMPLE_PERIOD_HEADROOM leaves room for the
+        state/actuator queries sharing the link. An estimate — the bench test with
+        :meth:`link_stats_summary` gives the real limit.
         """
-        return ceil(len(SENSORS) * 1000 / FW_LINES_PER_SECOND * SAMPLE_PERIOD_HEADROOM)
+        return ceil(2 * (FW_APP_TICK_MS + FW_SM_TICK_MS) * SAMPLE_PERIOD_HEADROOM)
 
     def link_stats_summary(self) -> str:
         """One log line describing link health since the last reset (connect or period change)."""
