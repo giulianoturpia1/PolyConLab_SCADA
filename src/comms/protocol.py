@@ -131,7 +131,7 @@ class Evt:
 class Resp:
     """Canonical single-line replies the PLC sends back over the wire.
 
-    Error replies are formatted firmware-side as ``"<code>,'MESSAGE'"`` and are
+    Error replies are formatted firmware-side as ``<code>,"MESSAGE"`` and are
     not enumerated here; detect them with :func:`is_error`.
     """
 
@@ -216,7 +216,7 @@ class ErrCode:
 
 
 def error_code(response: str) -> int | None:
-    """Numeric code of a firmware error reply (e.g. -106 for "-106,'BUSY'"), or None if not an error."""
+    """Numeric code of a firmware error reply (e.g. -106 for ``-106,"BUSY"``), or None if not an error."""
     if not is_error(response):
         return None
     try:
@@ -226,9 +226,9 @@ def error_code(response: str) -> int | None:
 
 
 def is_error(response: str) -> bool:
-    """True if ``response`` is a firmware error reply (e.g. "-101,'COMMAND REJECTED'").
+    """True if ``response`` is a firmware error reply (e.g. ``-101,"COMMAND REJECTED"``).
 
-    Errors are formatted as ``-<code>,'MESSAGE'``. The check requires both the
+    Errors are formatted as ``-<code>,"MESSAGE"``. The check requires both the
     leading minus sign and the comma so that negative sensor readings (e.g.
     "-5.3" from a sub-zero temperature) are not mistaken for errors.
     """
