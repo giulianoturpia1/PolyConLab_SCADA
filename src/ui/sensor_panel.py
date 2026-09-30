@@ -111,6 +111,8 @@ class SensorPanel(QObject):
             # Drop partial batch — new readings will rebuild it cleanly on resume.
             self._temp_batch.clear()
             self._faulted_chart_sensors.clear()
+            # Readings resume after an unknown pause: do not join them to the last ones.
+            self._chart.break_lines()
 
     def mark_init_fault(self, sensor: Sensor, ok: bool) -> None:
         """Apply the init-probe fault indicator to *sensor*'s card if it failed."""
@@ -149,6 +151,7 @@ class SensorPanel(QObject):
         self._faulted_chart_sensors.clear()
         self._over_limit = False
         self._chart.reset_visibility()
+        self._chart.break_lines()
         for card in self._cards.values():
             card.set_value("--")
 
