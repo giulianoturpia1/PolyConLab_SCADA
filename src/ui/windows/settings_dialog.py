@@ -87,7 +87,7 @@ class SettingsDialog(QDialog):
         self._inp_period.setSingleStep(SAMPLE_PERIOD_STEP_MS)
         self._inp_period.setSuffix(" ms")
         self._inp_period.setValue(period_ms)
-        form.addRow("Período de muestreo:", self._inp_period)
+        form.addRow("Período de Muestreo:", self._inp_period)
 
         # Warning shown only while the period is below the recommended minimum. With the current
         # bounds the field cannot go that low, so it appears only if those values ever change.

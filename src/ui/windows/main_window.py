@@ -189,7 +189,7 @@ class MainWindow(QMainWindow):
                 # Close the previous period's statistics window before a new one starts.
                 self.log(self._plc.link_stats_summary())
             self._plc.set_sample_period(period)
-            self.log(f"Período de muestreo: {period} ms.")
+            self.log(f"Período de Muestreo: {period} ms.")
             if period < recommended_min:
                 self.log(f"Aviso: por debajo del mínimo recomendado ({recommended_min} ms).")
 
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         default_name = f"mediciones_{QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')}.csv"
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Guardar datos",
+            "Guardar Datos",
             default_name,
             "Archivos CSV (*.csv)",
         )
@@ -282,7 +282,7 @@ class MainWindow(QMainWindow):
         if self._log.export_csv(file_path, limit=limit):
             self.log(f"Datos descargados en {file_path} ({limit} filas).")
             return True
-        QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")
+        QMessageBox.information(self, "Sin Datos", "No hay mediciones disponibles para descargar.")
         return False
 
     def _on_log_message(self, msg: str) -> None:

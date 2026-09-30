@@ -559,7 +559,7 @@ Descargue los datos antes si los necesita.</string></property>
    <property name="text"><string>Estadísticas de Enlace</string></property>
   </action>
   <action name="action_download">
-   <property name="text"><string>Descargar datos</string></property>
+   <property name="text"><string>Descargar Datos</string></property>
   </action>
  </widget>
  <customwidgets>
