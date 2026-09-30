@@ -270,12 +270,7 @@ QMenu::item:selected {
               <widget class="QPushButton" name="btn_pause">
                <property name="text"><string>Pausar</string></property>
                <property name="enabled"><bool>false</bool></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QPushButton" name="btn_resume">
-               <property name="text"><string>Reanudar</string></property>
-               <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>En MANUAL pausa el sistema. En PAUSA el botón pasa a «Reanudar» y retoma la operación.</string></property>
               </widget>
              </item>
              <item>
@@ -288,7 +283,7 @@ Reconecte para iniciar una nueva sesión.</string></property>
              </item>
              <item>
               <widget class="QPushButton" name="btn_ack">
-               <property name="text"><string>Aceptar Falla</string></property>
+               <property name="text"><string>Aceptar</string></property>
                <property name="enabled"><bool>false</bool></property>
                <property name="toolTip"><string>Reconoce la falla y confirma que la condición fue resuelta.
 Si el sistema estaba en MANUAL antes de la falla, vuelve directamente a MANUAL.
@@ -301,6 +296,14 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
                <property name="enabled"><bool>false</bool></property>
                <property name="toolTip"><string>Solicita al PLC repetir el CHEQUEO completo y re-verifica todos los sensores.
 Úselo si un sensor no respondió durante el inicio.</string></property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btn_reinit">
+               <property name="text"><string>Reinicializar Sensores</string></property>
+               <property name="enabled"><bool>false</bool></property>
+               <property name="toolTip"><string>Reintenta la inicialización de hardware de cada sensor en falla, sin reiniciar el PLC.
+Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar para salir de la falla.</string></property>
               </widget>
              </item>
             </layout>
@@ -383,6 +386,23 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
              <property name="bottomMargin"><number>4</number></property>
              <property name="spacing"><number>4</number></property>
              <item>
+              <layout class="QHBoxLayout" name="hbox_chart_tools">
+               <item>
+                <spacer name="hsp_chart_tools">
+                 <property name="orientation"><enum>Qt::Horizontal</enum></property>
+                 <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+                </spacer>
+               </item>
+               <item>
+                <widget class="QPushButton" name="btn_reset_measurements">
+                 <property name="text"><string>Reiniciar Mediciones</string></property>
+                 <property name="toolTip"><string>Descarta el gráfico y las mediciones registradas y reinicia el tiempo en 0 s.
+Descargue los datos antes si los necesita.</string></property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item>
               <widget class="QChartView" name="chart_view">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
@@ -453,6 +473,13 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="btn_temp_control">
+               <property name="enabled"><bool>false</bool></property>
+               <property name="minimumSize"><size><width>0</width><height>28</height></size></property>
+               <property name="text"><string>Control de Temperatura</string></property>
+              </widget>
+             </item>
+             <item>
               <widget class="QFrame" name="sep_act1">
                <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
                <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
@@ -474,7 +501,7 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_chiller"/>
+              <widget class="ActuatorRow" name="row_valve1"/>
              </item>
              <item>
               <widget class="QFrame" name="sep_act3">
@@ -486,25 +513,7 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_valve1"/>
-             </item>
-             <item>
-              <widget class="QFrame" name="sep_act4">
-               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
-               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
-               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
-               <property name="frameShape"><enum>QFrame::HLine</enum></property>
-               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="ActuatorRow" name="row_valve2"/>
-             </item>
-             <item>
-              <spacer name="vsp_ctrl">
-               <property name="orientation"><enum>Qt::Vertical</enum></property>
-               <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
-              </spacer>
+              <widget class="ActuatorRow" name="row_mixer"/>
              </item>
             </layout>
            </widget>
@@ -530,6 +539,8 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
    <widget class="QMenu" name="menu_avanzado">
     <property name="title"><string>Avanzado</string></property>
     <addaction name="action_log"/>
+    <addaction name="action_link_stats"/>
+    <addaction name="action_download"/>
    </widget>
    <widget class="QMenu" name="menu_configuracion">
     <property name="title"><string>Configuración</string></property>
@@ -543,6 +554,12 @@ Si estaba en CHEQUEO, re-verifica los sensores automáticamente.</string></prope
   </action>
   <action name="action_connection">
    <property name="text"><string>Conexión...</string></property>
+  </action>
+  <action name="action_link_stats">
+   <property name="text"><string>Estadísticas de Enlace</string></property>
+  </action>
+  <action name="action_download">
+   <property name="text"><string>Descargar Datos</string></property>
   </action>
  </widget>
  <customwidgets>

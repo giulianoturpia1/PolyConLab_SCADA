@@ -12,15 +12,14 @@ These have a Python class in `src/ui/widgets/`. Layout changes go in Qt Designer
 |---|---|---|---|
 | `card_tin` | `SensorCard` | `sensor_card.py` | T. Entrada reading tile |
 | `card_tout` | `SensorCard` | `sensor_card.py` | T. Salida reading tile |
-| `card_tcam` | `SensorCard` | `sensor_card.py` | T. Cámara reading tile |
+| `card_tcam` | `SensorCard` | `sensor_card.py` | T. Camisa reading tile |
 | `card_tmez` | `SensorCard` | `sensor_card.py` | T. Mezcla reading tile |
 | `card_flow` | `SensorCard` | `sensor_card.py` | Caudal reading tile |
 | `card_lvl` | `SensorCard` | `sensor_card.py` | Nivel reading tile |
 | `row_heater` | `ActuatorRow` | `actuator_row.py` | Calentador ON/OFF row |
 | `row_pump` | `ActuatorRow` | `actuator_row.py` | Bomba ON/OFF row |
-| `row_chiller` | `ActuatorRow` | `actuator_row.py` | Enfriador ON/OFF row |
+| `row_mixer` | `ActuatorRow` | `actuator_row.py` | Mezclador ON/OFF row |
 | `row_valve1` | `ActuatorRow` | `actuator_row.py` | Válvula 1 Abrir/Cerrar row |
-| `row_valve2` | `ActuatorRow` | `actuator_row.py` | Válvula 2 Abrir/Cerrar row |
 
 ### Chart view
 
@@ -42,8 +41,7 @@ Layout and static text in Qt Designer (`assets/ui/main_window.ui`). Runtime beha
 | `btn_ack` | `QPushButton` | Acknowledge fault and proceed to MANUAL |
 | `btn_connect` | `QPushButton` | Connect / Disconnect / Cancel toggle |
 | `btn_estop` | `QPushButton` | Graceful shutdown (EVT:SHUTDOWN + disconnect) |
-| `btn_pause` | `QPushButton` | Send EVT:PAUSE |
-| `btn_resume` | `QPushButton` | Send EVT:UNPAUSE |
+| `btn_pause` | `QPushButton` | Pause/resume: reads "Pausar" and sends EVT:PAUSE in MANUAL; reads "Reanudar" and sends EVT:UNPAUSE in PAUSE |
 | `btn_retry` | `QPushButton` | Retry full sensor checkup |
 | `heater_slider` | `QSlider` | Heater setpoint (synced to spinbox via Qt Designer) |
 | `heater_spinbox` | `QSpinBox` | Heater setpoint (synced to slider via Qt Designer) |

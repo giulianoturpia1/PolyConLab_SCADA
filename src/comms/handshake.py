@@ -1,4 +1,5 @@
-"""Drives the PLC initialization handshake after a TCP connection is established.
+"""Drives the PLC connect handshake after a TCP connection is established, and re-probes
+sensors and drives fault recovery for the lifetime of that connection.
 
 Expected wire flow::
 
@@ -10,45 +11,26 @@ Expected wire flow::
     → STATE? → "MANUAL"   →  finished(True)
 
 If the PLC is already in CHECKUP or MANUAL when we connect, the corresponding
-earlier steps are skipped.  Call :meth:`restart` to re-run the sensor probe
-after the user sends a RETRY CHECKUP without tearing down the TCP connection.
+earlier steps are skipped.  Call :meth:`reprobe_sensors` after the operator
+requests a retry — it sends RETRY CHECKUP itself and re-runs the sensor probe,
+without tearing down the TCP connection.
 """
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from comms.plc_client import PlcClient
-from comms.protocol import Evt
-from models import Sensor
-
-# ── Timing constants ─────────────────────────────────────────────────────────
-
-# How long (ms) to wait after sending a transition event before re-querying
-# STATE? to let the PLC's FreeRTOS scheduler process the event and settle.
-_SETTLE_MS = 400
-
-# Overall timeout (ms) for the sensor probe step.  Each sensor query takes
-# at most one SM tick (~50 ms) plus network latency; 6 sensors × ≈100 ms each
-# gives ~600 ms nominal, so 6 s is a generous upper bound.
-_PROBE_TIMEOUT_MS = 6_000
-
-# ── Human-readable sensor labels (Spanish UI) ────────────────────────────────
-
-_SENSOR_LABEL: dict[Sensor, str] = {
-    Sensor.TEMP_IN: "T. Entrada",
-    Sensor.TEMP_OUT: "T. Salida",
-    Sensor.TEMP_BATH: "T. Cámara",
-    Sensor.TEMP_MIX: "T. Mezcla",
-    Sensor.FLOW: "Caudal",
-    Sensor.LEVEL: "Nivel",
-}
+from comms.protocol import Evt, State
+from config.polling import HANDSHAKE_PROBE_TIMEOUT_MS, HANDSHAKE_SETTLE_MS, PENDING_TTL_MS
+from models import SENSOR_LABEL, Sensor
 
 
-class InitSequence(QObject):
-    """One-shot (per connection) initialization handshake driver.
+class PlcHandshake(QObject):
+    """Drives the PLC connect handshake, sensor re-probing, and fault-recovery flows.
 
     Create one instance per :class:`~comms.plc_client.PlcClient` and reuse it
     across sessions by calling :meth:`start` after every TCP connect.
@@ -70,8 +52,20 @@ class InitSequence(QObject):
 
         self._probe_timer = QTimer(self)
         self._probe_timer.setSingleShot(True)
-        self._probe_timer.setInterval(_PROBE_TIMEOUT_MS)
+        self._probe_timer.setInterval(HANDSHAKE_PROBE_TIMEOUT_MS)
         self._probe_timer.timeout.connect(self._on_probe_timeout)
+
+        # A STATE? reply that never comes (PLC silent, reply lost) must end the sequence instead of
+        # leaving it running forever; the client drops the command after PENDING_TTL_MS, so wait as long.
+        self._state_timer = QTimer(self)
+        self._state_timer.setSingleShot(True)
+        self._state_timer.setInterval(PENDING_TTL_MS)
+        self._state_timer.timeout.connect(self._on_state_timeout)
+
+        # Live STATE? listener, if any, plus an epoch that invalidates in-flight
+        # work (pending listener, settle timers) when a sequence is cancelled.
+        self._state_slot: Callable[[str], None] | None = None
+        self._epoch = 0
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -92,19 +86,21 @@ class InitSequence(QObject):
         self.progress.emit("Conectado — verificando estado del sistema...")
         self._query_state(self._on_initial_state)
 
-    def restart(self) -> None:
-        """Re-run only the sensor probe step (used after a RETRY CHECKUP).
+    def reprobe_sensors(self) -> None:
+        """Ask the PLC to re-run the sensor checkup, then re-probe.
 
-        Sends STATE? first to confirm the PLC reached CHECKUP before probing.
-        No-op if already running.
+        Sends EVT:RETRY CHECKUP itself and confirms the PLC reached CHECKUP before probing, so the
+        whole retry flow has a single owner — the caller only expresses the intent. No-op if a
+        sequence is already running.
         """
         if self._running:
             return
         self._running = True
         self.progress.emit("Re-verificando sensores...")
+        self._plc.send_event(Evt.RETRY_CHECKUP)
         self._query_state(self._on_post_init_state)
 
-    def force_proceed(self) -> None:
+    def skip_probe(self) -> None:
         """Skip the sensor probe and complete the handshake unconditionally.
 
         Used when the operator acknowledges known-failed sensors and wants to
@@ -124,55 +120,81 @@ class InitSequence(QObject):
         self._query_state(self._on_force_state)
 
     def abort(self) -> None:
-        """Cancel any in-progress sequence (e.g. on TCP disconnect)."""
+        """Cancel any in-progress sequence (e.g. on TCP disconnect).
+
+        Drops the pending STATE? listener and bumps the epoch so a reply or a
+        settle timer belonging to the cancelled run is ignored instead of
+        starting a second, parallel handshake on the next connection.
+        """
         self._probe_timer.stop()
+        self._disconnect_state_slot()
+        self._epoch += 1
         self._running = False
 
     # ── Internal helpers ───────────────────────────────────────────────────────
 
+    def _disconnect_state_slot(self) -> None:
+        """Drop the pending STATE? listener, if any, and its timeout. Idempotent."""
+        self._state_timer.stop()
+        if self._state_slot is None:
+            return
+        with contextlib.suppress(RuntimeError):  # already disconnected (e.g. object deleted)
+            self._plc.state_received.disconnect(self._state_slot)
+        self._state_slot = None
+
     def _query_state(self, callback: Callable[[str], None]) -> None:
         """Send STATE? and deliver the single reply to *callback*.
 
-        A one-shot wrapper is used so the slot is automatically disconnected
-        after the first emission, preventing stale callbacks from stacking up.
+        At most one listener is connected at a time and it is dropped as soon as
+        it fires, so aborted sequences cannot leave slots stacked on the signal.
         """
+        self._disconnect_state_slot()
+        epoch = self._epoch
 
         def one_shot(state: str) -> None:
-            try:
-                self._plc.state_received.disconnect(one_shot)
-            except RuntimeError:
-                pass  # already disconnected (e.g. object deleted)
+            self._disconnect_state_slot()
+            if epoch != self._epoch:
+                return  # the sequence was cancelled while this query was in flight
             callback(state)
 
+        self._state_slot = one_shot
         self._plc.state_received.connect(one_shot)
+        self._state_timer.start()
 
         if not self._plc.query_state():
-            try:
-                self._plc.state_received.disconnect(one_shot)
-            except RuntimeError:
-                pass
+            self._disconnect_state_slot()
             self._finish(False, "Sin respuesta del PLC al consultar estado.")
+
+    def _defer_query(self, callback: Callable[[str], None]) -> None:
+        """Re-query STATE? after the settle delay, unless the sequence was cancelled."""
+        epoch = self._epoch
+
+        def go() -> None:
+            if epoch == self._epoch:
+                self._query_state(callback)
+
+        QTimer.singleShot(HANDSHAKE_SETTLE_MS, go)
 
     # ── State callbacks ────────────────────────────────────────────────────────
 
     def _on_initial_state(self, state: str) -> None:
         """React to the first STATE? reply after connecting."""
-        if state == "STARTUP":
+        if state == State.STARTUP:
             # Normal boot path: PLC waiting for the SCADA to kick off the checkup.
             self.progress.emit("PLC en inicio — comenzando chequeo del sistema...")
             self._plc.send_event(Evt.INIT_OK)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_post_init_state))
+            self._defer_query(self._on_post_init_state)
 
-        elif state == "CHECKUP":
+        elif state == State.CHECKUP:
             # PLC was already in CHECKUP (e.g. SCADA reconnected during init).
             self._begin_probe()
 
-        elif state == "MANUAL":
+        elif state == State.MANUAL:
             # Common reconnect path: SCADA closed the TCP session but the
             # Ethernet cable stayed connected, so the PLC stayed in MANUAL.
             self._finish(True, "Sistema ya operativo.")
 
-        elif state == "PAUSE":
+        elif state == State.PAUSE:
             # The PLC is suspended.  Most likely the operator paused the system
             # before the SCADA disconnected.  The FW will also enter PAUSE
             # automatically if the Ethernet cable is pulled and then reinserted
@@ -182,7 +204,7 @@ class InitSequence(QObject):
             # Action: surface the Resume button; the operator decides when to continue.
             self._finish(False, "PLC en PAUSE — use el botón Reanudar para continuar.")
 
-        elif state in ("SOFT ERROR", "HARD ERROR"):
+        elif state in (State.SOFT_ERROR, State.HARD_ERROR):
             # PLC was in an error state when we connected (e.g. a sensor failed
             # on a previous boot and the SCADA was restarted).
             self._finish(False, f"PLC en estado de falla «{state}». Use los botones de recuperación.")
@@ -192,9 +214,9 @@ class InitSequence(QObject):
 
     def _on_post_init_state(self, state: str) -> None:
         """React to the STATE? reply after the PLC was told to begin checkup."""
-        if state == "CHECKUP":
+        if state == State.CHECKUP:
             self._begin_probe()
-        elif state == "MANUAL":
+        elif state == State.MANUAL:
             self._finish(True, "Sistema listo.")
         else:
             self._finish(False, f"El PLC no alcanzó CHEQUEO (estado actual: «{state}»)")
@@ -210,14 +232,25 @@ class InitSequence(QObject):
     def _on_probe_timeout(self) -> None:
         self._finish(False, "Tiempo de espera agotado verificando sensores.")
 
+    def _on_state_timeout(self) -> None:
+        self._finish(False, "Sin respuesta del PLC al consultar estado.")
+
     def _on_probe_done(self, results: dict[Sensor, bool]) -> None:
-        """Evaluate sensor probe results and complete the handshake accordingly."""
+        """Evaluate sensor probe results and complete the handshake accordingly.
+
+        Replies that arrive after the probe timed out belong to a sequence that
+        already finished; acting on them would send the OK events and emit a
+        second ``finished`` for a run the controller has moved on from.
+        """
+        if not self._running:
+            return
+
         self._probe_timer.stop()
 
         for sensor, ok in results.items():
             self.sensor_result.emit(sensor, ok)
 
-        failed = [_SENSOR_LABEL[s] for s, ok in results.items() if not ok]
+        failed = [SENSOR_LABEL[s] for s, ok in results.items() if not ok]
 
         if failed:
             names = ", ".join(failed)
@@ -228,11 +261,11 @@ class InitSequence(QObject):
             self.progress.emit("Sensores OK — habilitando sistema...")
             self._plc.send_event(Evt.SCADA_OK)
             self._plc.send_event(Evt.SENSORS_OK)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_final_state))
+            self._defer_query(self._on_final_state)
 
     def _on_final_state(self, state: str) -> None:
         """Confirm the PLC reached MANUAL after the successful handshake."""
-        if state == "MANUAL":
+        if state == State.MANUAL:
             self._finish(True, "Sistema listo.")
         else:
             self._finish(False, f"El PLC no alcanzó MANUAL (estado actual: «{state}»)")
@@ -241,23 +274,23 @@ class InitSequence(QObject):
 
     def _on_force_state(self, state: str) -> None:
         """Decide how to reach CHECKUP based on the current state."""
-        if state == "MANUAL":
+        if state == State.MANUAL:
             self._finish(True, "Sistema ya en MANUAL.")
-        elif state == "CHECKUP":
+        elif state == State.CHECKUP:
             self._send_ok_events()
-        elif state == "SOFT ERROR":
+        elif state == State.SOFT_ERROR:
             self.progress.emit("Reconociendo error y continuando...")
             self._plc.send_event(Evt.ACK_FAULT)
             self._plc.send_event(Evt.CONDITION_CLEARED)
-            QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_force_checkup_state))
+            self._defer_query(self._on_force_checkup_state)
         else:
             self._finish(False, f"No se puede continuar desde estado «{state}»")
 
     def _on_force_checkup_state(self, state: str) -> None:
         """Confirm CHECKUP was reached after ACK, then send the OK events."""
-        if state == "CHECKUP":
+        if state == State.CHECKUP:
             self._send_ok_events()
-        elif state == "MANUAL":
+        elif state == State.MANUAL:
             self._finish(True, "Sistema listo.")
         else:
             self._finish(False, f"Estado inesperado tras reconocimiento: «{state}»")
@@ -267,10 +300,12 @@ class InitSequence(QObject):
         self.progress.emit("Completando acceso a MANUAL sin re-verificar sensores...")
         self._plc.send_event(Evt.SCADA_OK)
         self._plc.send_event(Evt.SENSORS_OK)
-        QTimer.singleShot(_SETTLE_MS, lambda: self._query_state(self._on_final_state))
+        self._defer_query(self._on_final_state)
 
     # ── Finish ─────────────────────────────────────────────────────────────────
 
     def _finish(self, success: bool, msg: str) -> None:
+        self._disconnect_state_slot()
+        self._epoch += 1
         self._running = False
         self.finished.emit(success, msg)

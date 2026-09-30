@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 
+from comms.protocol import State
+
 
 class ScadaState(Enum):
     DISCONNECTED = auto()
@@ -29,6 +31,8 @@ class _EnabledControls:
     stop:      bool = False
     ack:       bool = False
     retry:     bool = False
+    reinit:    bool = False
+    actuator_queries: bool = False  # the FW answers OUTP:...? here, so the rows can show real states
 
 
 STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
@@ -37,22 +41,22 @@ STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
     ScadaState.INITIALIZING:  _EnabledControls(),
     ScadaState.STARTUP:       _EnabledControls(),
     ScadaState.CHECKUP:       _EnabledControls(),
-    ScadaState.MANUAL:        _EnabledControls(sensors=True, actuators=True, pause=True, stop=True),
-    ScadaState.PAUSE:         _EnabledControls(resume=True, stop=True),
-    ScadaState.SOFT_ERROR:    _EnabledControls(ack=True, retry=True),
+    ScadaState.MANUAL:        _EnabledControls(sensors=True, actuators=True, pause=True, stop=True, actuator_queries=True),
+    ScadaState.PAUSE:         _EnabledControls(resume=True, stop=True, actuator_queries=True),
+    ScadaState.SOFT_ERROR:    _EnabledControls(ack=True, retry=True, reinit=True),
     ScadaState.HARD_ERROR:    _EnabledControls(),
     ScadaState.SHUTDOWN:      _EnabledControls(),
     ScadaState.UNKNOWN:       _EnabledControls(),
 }
 
 _PLC_MAP: dict[str, ScadaState] = {
-    "STARTUP":    ScadaState.STARTUP,
-    "CHECKUP":    ScadaState.CHECKUP,
-    "MANUAL":     ScadaState.MANUAL,
-    "PAUSE":      ScadaState.PAUSE,
-    "SOFT ERROR": ScadaState.SOFT_ERROR,
-    "HARD ERROR": ScadaState.HARD_ERROR,
-    "SHUTDOWN":   ScadaState.SHUTDOWN,
+    State.STARTUP:    ScadaState.STARTUP,
+    State.CHECKUP:    ScadaState.CHECKUP,
+    State.MANUAL:     ScadaState.MANUAL,
+    State.PAUSE:      ScadaState.PAUSE,
+    State.SOFT_ERROR: ScadaState.SOFT_ERROR,
+    State.HARD_ERROR: ScadaState.HARD_ERROR,
+    State.SHUTDOWN:   ScadaState.SHUTDOWN,
 }
 
 

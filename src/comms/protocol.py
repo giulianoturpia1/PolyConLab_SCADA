@@ -30,10 +30,10 @@ class Cmd:
     PUMP_OFF = "OUTP:PUMP OFF"
     PUMP_STATE = "OUTP:PUMP?"
 
-    # Chiller
-    CHILL_ON = "OUTP:CHILL ON"
-    CHILL_OFF = "OUTP:CHILL OFF"
-    CHILL_STATE = "OUTP:CHILL?"
+    # Mixer / emulsifier
+    MIX_ON = "OUTP:MIX ON"
+    MIX_OFF = "OUTP:MIX OFF"
+    MIX_STATE = "OUTP:MIX?"
 
     # Sensor reads
     TEMP_IN = "MEAS:TEMP:IN?"
@@ -51,8 +51,21 @@ class Cmd:
     LOG_STATE = "SYST:LOG?"
     FAULT_QUERY = "SYST:FAULT?"  # Query which devices failed hardware initialisation
 
+    # Sensor re-initialisation: re-run one sensor's hardware begin() on the PLC.
+    REINIT_TEMP_IN = "SYST:REINIT:TEMP:IN"
+    REINIT_TEMP_OUT = "SYST:REINIT:TEMP:OUT"
+    REINIT_TEMP_BATH = "SYST:REINIT:TEMP:CAM"
+    REINIT_TEMP_MIX = "SYST:REINIT:TEMP:MEZ"
+    REINIT_FLOW = "SYST:REINIT:FLOW"
+    REINIT_LEVEL = "SYST:REINIT:LEVEL"
+
+    # Temperature control (manual inlet setpoint). The FW handles TEMP:SET:IN as a
+    # LOCAL TOGGLE in ManualState and answers with the resulting control state
+    # (ON / OFF), so the reply must be correlated like any other command.
+    TEMP_SET_IN = "TEMP:SET:IN"
+
     # Valves are parameterized by number, appended after a comma
-    # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve numbers 1 and 2 only.
+    # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve number 1 only.
     @staticmethod
     def valve_open(n: int) -> str:
         """Command to open valve ``n``."""
@@ -68,6 +81,11 @@ class Cmd:
         """Query for the state of valve ``n``."""
         return f"OUTP:VALV?,{n}"
 
+    @staticmethod
+    def temp_set_in(value: float) -> str:
+        """Command line to set the inlet temperature setpoint (toggles control in the FW)."""
+        return f"{Cmd.TEMP_SET_IN},{value}"
+
 
 class Evt:
     """State-machine events (``EVT:`` prefix).
@@ -79,6 +97,8 @@ class Evt:
     * :attr:`SENSORS_OK` — all sensor probes passed (sent while PLC is in CHECKUP).
     * :attr:`FAULT_RECOVERABLE` — at least one sensor probe failed; PLC goes to SOFT ERROR.
     """
+
+    PREFIX = "EVT:"  # every event line starts with this; the PLC answers an event only to reject it
 
     # Initialisation handshake
     INIT_OK = "EVT:INIT OK"
@@ -122,6 +142,19 @@ class Resp:
     HIGH = "HIGH"
     LOW = "LOW"
     PONG = "PONG"
+    OK = "OK"  # positive reply to a SYST:REINIT command
+
+
+class State:
+    """Canonical FSM state names as the PLC reports them in a STATE? reply."""
+
+    STARTUP = "STARTUP"
+    CHECKUP = "CHECKUP"
+    MANUAL = "MANUAL"
+    PAUSE = "PAUSE"
+    SOFT_ERROR = "SOFT ERROR"
+    HARD_ERROR = "HARD ERROR"
+    SHUTDOWN = "SHUTDOWN"
 
 
 @dataclass(frozen=True)
@@ -139,9 +172,8 @@ class ActuatorSpec:
 ACTUATORS: dict[Device, ActuatorSpec] = {
     Device.HEATER: ActuatorSpec(Cmd.HEAT_ON, Cmd.HEAT_OFF, Resp.ON, Resp.OFF),
     Device.PUMP: ActuatorSpec(Cmd.PUMP_ON, Cmd.PUMP_OFF, Resp.ON, Resp.OFF),
-    Device.CHILLER: ActuatorSpec(Cmd.CHILL_ON, Cmd.CHILL_OFF, Resp.ON, Resp.OFF),
+    Device.MIXER: ActuatorSpec(Cmd.MIX_ON, Cmd.MIX_OFF, Resp.ON, Resp.OFF),
     Device.VALVE1: ActuatorSpec(Cmd.valve_open(1), Cmd.valve_close(1), Resp.OPEN, Resp.CLOSED),
-    Device.VALVE2: ActuatorSpec(Cmd.valve_open(2), Cmd.valve_close(2), Resp.OPEN, Resp.CLOSED),
 }
 
 # Maps each logical sensor to the query command that reads it.
@@ -154,6 +186,16 @@ SENSORS: dict[Sensor, str] = {
     Sensor.LEVEL: Cmd.LEVEL,
 }
 
+# Maps each logical sensor to the command that re-initialises it on the PLC.
+REINIT: dict[Sensor, str] = {
+    Sensor.TEMP_IN: Cmd.REINIT_TEMP_IN,
+    Sensor.TEMP_OUT: Cmd.REINIT_TEMP_OUT,
+    Sensor.TEMP_BATH: Cmd.REINIT_TEMP_BATH,
+    Sensor.TEMP_MIX: Cmd.REINIT_TEMP_MIX,
+    Sensor.FLOW: Cmd.REINIT_FLOW,
+    Sensor.LEVEL: Cmd.REINIT_LEVEL,
+}
+
 
 def parse_value(line: str) -> float | None:
     """Parse a numeric sensor reply (e.g. "25.30", "-5.3") to float, else None.
@@ -163,6 +205,22 @@ def parse_value(line: str) -> float | None:
     """
     try:
         return float(line)
+    except ValueError:
+        return None
+
+
+class ErrCode:
+    """Numeric codes of the firmware error replies the SCADA reacts to specifically."""
+
+    BUSY = -106  # every command slot was taken; the command was not executed
+
+
+def error_code(response: str) -> int | None:
+    """Numeric code of a firmware error reply (e.g. -106 for "-106,'BUSY'"), or None if not an error."""
+    if not is_error(response):
+        return None
+    try:
+        return int(response.lstrip().split(",", 1)[0])
     except ValueError:
         return None
 

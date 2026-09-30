@@ -43,6 +43,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,  # Windowed app — no terminal window
+    icon="../assets/images/app.ico",  # Icon of the .exe in Explorer, shortcuts and the taskbar
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
