@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from config.network import DEFAULT_HOST, PORT_MAX, PORT_MIN
+from ui.style import metrics as m
 from ui.style import palette as col
 
 
@@ -25,7 +27,7 @@ class SettingsDialog(QDialog):
     def __init__(self, host: str, port: int, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Configuración de Conexión")
-        self.setFixedSize(320, 148)
+        self.setFixedSize(m.SETTINGS_DIALOG_W_PX, m.SETTINGS_DIALOG_H_PX)
         self.setStyleSheet(f"""
             QDialog, QWidget {{
                 background-color: {col.BG};
@@ -69,11 +71,11 @@ class SettingsDialog(QDialog):
         form.setSpacing(8)
 
         self._inp_host = QLineEdit(host)
-        self._inp_host.setPlaceholderText("192.168.1.1")
+        self._inp_host.setPlaceholderText(DEFAULT_HOST)
         form.addRow("Dirección IP:", self._inp_host)
 
         self._inp_port = QSpinBox()
-        self._inp_port.setRange(1, 65535)
+        self._inp_port.setRange(PORT_MIN, PORT_MAX)
         self._inp_port.setValue(port)
         form.addRow("Puerto:", self._inp_port)
 

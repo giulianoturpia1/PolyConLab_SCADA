@@ -501,30 +501,6 @@ Los sensores recuperados se limpian; luego use Reintentar Chequeo o Aceptar Fall
               </widget>
              </item>
              <item>
-              <widget class="ActuatorRow" name="row_valve2"/>
-             </item>
-             <item>
-              <widget class="QFrame" name="sep_act4">
-               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
-               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
-               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
-               <property name="frameShape"><enum>QFrame::HLine</enum></property>
-               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
-              </widget>
-             </item>
-             <item>
-              <widget class="ActuatorRow" name="row_chiller"/>
-             </item>
-             <item>
-              <widget class="QFrame" name="sep_act5">
-               <property name="minimumSize"><size><width>0</width><height>1</height></size></property>
-               <property name="maximumSize"><size><width>16777215</width><height>1</height></size></property>
-               <property name="styleSheet"><string notr="true">background: #3D4452; border: none;</string></property>
-               <property name="frameShape"><enum>QFrame::HLine</enum></property>
-               <property name="frameShadow"><enum>QFrame::Plain</enum></property>
-              </widget>
-             </item>
-             <item>
               <widget class="ActuatorRow" name="row_mixer"/>
              </item>
             </layout>

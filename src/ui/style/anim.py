@@ -13,6 +13,8 @@ from PySide6.QtWidgets import QGraphicsOpacityEffect, QWidget
 # ── Named fade durations used across the main window ─────────────────────────
 STATE_LABEL_FADE_MS = 400   # FSM state label fade on each state change
 ACTION_BTN_FADE_MS = 500    # action button group fade-in on connect
+ACTUATOR_BTN_FADE_MS = 400  # actuator ON/OFF button confirmation flash
+SENSOR_VALUE_FADE_MS = 450  # sensor card value fade-in on each new reading
 
 
 class Fade:

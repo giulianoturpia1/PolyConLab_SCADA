@@ -25,11 +25,8 @@ from PySide6.QtCore import QObject
 
 from comms.plc_client import PlcClient
 from comms.protocol import Resp
+from config.data import EXPORT_DEFAULT_ROWS, LOG_MAX_ROWS
 from models import Device
-
-# Maximum recorded rows kept in memory, comfortably above the download dialog's
-# 100 000-row maximum (see MainWindow._download_data).
-_MAX_ROWS = 200_000
 
 # CSV column headers, in the exact order written by export_csv(). The first five
 # columns are byte-identical to the legacy TemperatureChart.export_history() output
@@ -43,26 +40,22 @@ _CSV_HEADER = [
     "Estado",
     "Calefactor",
     "Bomba",
-    "Enfriador",
     "Válvula 1",
-    "Válvula 2",
     "Control Temp",
     "Mezclador",
 ]
 
 # Per-device (on-word, off-word) pair used to render its confirmed boolean status.
-# Heater/pump/chiller/mixer report ON/OFF; the valves report OPEN/CLOSED.
+# Heater/pump/mixer report ON/OFF; the valve reports OPEN/CLOSED.
 _DEVICE_ON_OFF: dict[Device, tuple[str, str]] = {
     Device.HEATER: (Resp.ON, Resp.OFF),
     Device.PUMP: (Resp.ON, Resp.OFF),
-    Device.CHILLER: (Resp.ON, Resp.OFF),
     Device.MIXER: (Resp.ON, Resp.OFF),
     Device.VALVE1: (Resp.OPEN, Resp.CLOSED),
-    Device.VALVE2: (Resp.OPEN, Resp.CLOSED),
 }
 
-# Device columns, in CSV column order (Calefactor, Bomba, Enfriador, Válvula 1, Válvula 2).
-_DEVICE_COLUMNS = (Device.HEATER, Device.PUMP, Device.CHILLER, Device.VALVE1, Device.VALVE2)
+# Device columns, in CSV column order (Calefactor, Bomba, Válvula 1).
+_DEVICE_COLUMNS = (Device.HEATER, Device.PUMP, Device.VALVE1)
 
 # Device columns written after "Control Temp" (Mezclador). Devices added after the CSV
 # layout was published go here, on the right, so existing columns keep their position.
@@ -85,7 +78,7 @@ class MeasurementLog(QObject):
         """Wire up to *plc*'s status signals and start with an empty, all-unknown log."""
         super().__init__(parent)
         self._plc = plc
-        self._rows: deque[dict[str, object]] = deque(maxlen=_MAX_ROWS)
+        self._rows: deque[dict[str, object]] = deque(maxlen=LOG_MAX_ROWS)
         self._reset_status()
 
         self._plc.actuator_changed.connect(self._on_actuator_changed)
@@ -104,7 +97,7 @@ class MeasurementLog(QObject):
     ) -> None:
         """Append one row: the four temperatures plus the status as it stands right now.
 
-        Oldest rows are dropped once :data:`_MAX_ROWS` is exceeded.
+        Oldest rows are dropped once :data:`config.data.LOG_MAX_ROWS` is exceeded.
         """
         self._rows.append(
             {
@@ -119,7 +112,7 @@ class MeasurementLog(QObject):
             }
         )
 
-    def export_csv(self, path: str | Path, limit: int = 50) -> bool:
+    def export_csv(self, path: str | Path, limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Write the last *limit* recorded rows to *path* as CSV; return False if there are none.
 
         A status column is left as an empty string for any row recorded before the

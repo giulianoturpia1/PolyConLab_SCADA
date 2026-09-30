@@ -14,15 +14,15 @@ from PySide6.QtWidgets import QAbstractButton, QAbstractSlider, QSpinBox
 from comms.plc_client import PlcClient
 from comms.protocol import Cmd
 from models import Device
+from ui.style import metrics as m
 from ui.style import palette as col
 
 # Corner rounding for the toggle button, in px.
-_BORDER_RADIUS_PX = 4
 
 # Button style while control was last requested ON (in MANUAL).
 _ACTIVE_STYLE = (
     f"background-color:{col.ACTIVE};color:{col.WHITE};"
-    f"font-weight:bold;border-radius:{_BORDER_RADIUS_PX}px;"
+    f"font-weight:bold;border-radius:{m.TEMP_CONTROL_RADIUS_PX}px;"
 )
 _IDLE_STYLE = "font-weight:bold;"
 

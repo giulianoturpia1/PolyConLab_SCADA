@@ -30,11 +30,6 @@ class Cmd:
     PUMP_OFF = "OUTP:PUMP OFF"
     PUMP_STATE = "OUTP:PUMP?"
 
-    # Chiller
-    CHILL_ON = "OUTP:CHILL ON"
-    CHILL_OFF = "OUTP:CHILL OFF"
-    CHILL_STATE = "OUTP:CHILL?"
-
     # Mixer / emulsifier
     MIX_ON = "OUTP:MIX ON"
     MIX_OFF = "OUTP:MIX OFF"
@@ -70,7 +65,7 @@ class Cmd:
     TEMP_SET_IN = "TEMP:SET:IN"
 
     # Valves are parameterized by number, appended after a comma
-    # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve numbers 1 and 2 only.
+    # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve number 1 only.
     @staticmethod
     def valve_open(n: int) -> str:
         """Command to open valve ``n``."""
@@ -175,10 +170,8 @@ class ActuatorSpec:
 ACTUATORS: dict[Device, ActuatorSpec] = {
     Device.HEATER: ActuatorSpec(Cmd.HEAT_ON, Cmd.HEAT_OFF, Resp.ON, Resp.OFF),
     Device.PUMP: ActuatorSpec(Cmd.PUMP_ON, Cmd.PUMP_OFF, Resp.ON, Resp.OFF),
-    Device.CHILLER: ActuatorSpec(Cmd.CHILL_ON, Cmd.CHILL_OFF, Resp.ON, Resp.OFF),
     Device.MIXER: ActuatorSpec(Cmd.MIX_ON, Cmd.MIX_OFF, Resp.ON, Resp.OFF),
     Device.VALVE1: ActuatorSpec(Cmd.valve_open(1), Cmd.valve_close(1), Resp.OPEN, Resp.CLOSED),
-    Device.VALVE2: ActuatorSpec(Cmd.valve_open(2), Cmd.valve_close(2), Resp.OPEN, Resp.CLOSED),
 }
 
 # Maps each logical sensor to the query command that reads it.

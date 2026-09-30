@@ -10,10 +10,8 @@ class Device(Enum):
 
     HEATER = auto()
     PUMP = auto()
-    CHILLER = auto()
     MIXER = auto()
     VALVE1 = auto()
-    VALVE2 = auto()
 
 
 class Sensor(Enum):

@@ -2,7 +2,7 @@
 Real-time temperature chart.
 
 Wraps the QChart, its four series and both axes. Purely a live display: it plots
-the last :data:`~TemperatureChart.WINDOW_SECONDS` of readings and keeps no history
+the last :data:`config.data.CHART_WINDOW_S` of readings and keeps no history
 of its own — see :class:`~ui.measurement_log.MeasurementLog` for recording and CSV
 export of measurements.
 Series visibility is driven externally via :meth:`set_series_visible` — each
@@ -15,7 +15,9 @@ from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter
 
-from comms.plc_client import POLL_INTERVAL_MS
+from config.data import CHART_TEMP_MAX_C, CHART_TEMP_MIN_C, CHART_WINDOW_S
+from config.polling import SENSOR_POLL_INTERVAL_MS
+from ui.style import metrics as m
 from ui.style import palette as col
 
 # (name, color) — fixed order: tin, tout, tcam, tmez
@@ -29,12 +31,6 @@ _SERIES_CFG = [
 
 class TemperatureChart(QObject):
     """Manages the temperature line chart's series, axes and rolling time window."""
-
-    WINDOW_SECONDS = 300  # rolling time window shown on the X axis (5 minutes)
-    _TEMP_MIN_C = 0  # default Y-axis lower bound (°C)
-    _TEMP_MAX_C = 100  # default Y-axis upper bound (°C)
-    _X_TICK_COUNT = 6  # X-axis tick labels (one every 60 s over a 300 s window)
-    _POINT_MARKER_SIZE = 6  # visible point-marker diameter (px) drawn on each series
 
     def __init__(self, chart_view: QChartView) -> None:
         """Build the chart and attach it to the view."""
@@ -62,7 +58,7 @@ class TemperatureChart(QObject):
             s.setColor(QColor(color))
             s.setVisible(False)  # hidden until the user enables polling
             s.setPointsVisible(True)
-            s.setMarkerSize(self._POINT_MARKER_SIZE)
+            s.setMarkerSize(m.CHART_POINT_MARKER_PX)
             chart.addSeries(s)
             self._series.append(s)
 
@@ -74,8 +70,8 @@ class TemperatureChart(QObject):
         legend.setLabelColor(QColor(col.TEXT))
 
         self._ax_x = QValueAxis()
-        self._ax_x.setRange(0, self.WINDOW_SECONDS)
-        self._ax_x.setTickCount(self._X_TICK_COUNT)
+        self._ax_x.setRange(0, CHART_WINDOW_S)
+        self._ax_x.setTickCount(m.CHART_X_TICK_COUNT)
         self._ax_x.setLabelFormat("%d")
         self._ax_x.setLabelsColor(QColor(col.TEXT))
         self._ax_x.setGridLineColor(QColor(col.BORDER))
@@ -83,7 +79,7 @@ class TemperatureChart(QObject):
         self._ax_x.setTitleBrush(QColor(col.TEXT))
 
         self._ax_y = QValueAxis()
-        self._ax_y.setRange(self._TEMP_MIN_C, self._TEMP_MAX_C)
+        self._ax_y.setRange(CHART_TEMP_MIN_C, CHART_TEMP_MAX_C)
         self._ax_y.setLabelFormat("%.0f ")
         self._ax_y.setLabelsColor(QColor(col.TEXT))
         self._ax_y.setGridLineColor(QColor(col.BORDER))
@@ -123,7 +119,7 @@ class TemperatureChart(QObject):
         Only series that received a new point participate in the window-slide
         removal, keeping every series' point count internally consistent.
         """
-        step_s = POLL_INTERVAL_MS / 1000  # one sample, in seconds
+        step_s = SENSOR_POLL_INTERVAL_MS / 1000  # one sample, in seconds
         t_seconds = self._t * step_s
         updated: list[QLineSeries] = []
         for s, v in zip(self._series, (tin, tout, tcam, tmez)):
@@ -132,7 +128,7 @@ class TemperatureChart(QObject):
                 updated.append(s)
         self._t += 1
 
-        if t_seconds >= self.WINDOW_SECONDS:
-            self._ax_x.setRange(t_seconds - self.WINDOW_SECONDS + step_s, t_seconds)
+        if t_seconds >= CHART_WINDOW_S:
+            self._ax_x.setRange(t_seconds - CHART_WINDOW_S + step_s, t_seconds)
             for s in updated:
                 s.removePoints(0, 1)

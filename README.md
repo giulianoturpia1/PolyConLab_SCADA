@@ -25,7 +25,7 @@ Repository that holds all the SCADA-related utilities for the PolyConLab system,
 
 ### 1.1. Introduction
 
-PolyConLab_SCADA is a desktop application that communicates with the PolyConLab PLC over Ethernet using the SCPI protocol (TCP on port 80). It allows operators to monitor sensor readings, control actuators, and track the system state through a graphical interface built with **PySide6** and designed visually using **Qt Designer**.
+PolyConLab_SCADA is a desktop application that communicates with the PolyConLab PLC over WiFi (or Ethernet, depending on the firmware build) using the SCPI protocol (TCP on port 80). It allows operators to monitor sensor readings, control actuators, and track the system state through a graphical interface built with **PySide6** and designed visually using **Qt Designer**.
 
 The application is distributed as a standalone Windows executable produced by **PyInstaller** and packaged into an installer using **InstallForge**.
 
@@ -43,51 +43,30 @@ Before you begin, ensure you have the following installed:
 
 ### 1.3. Network Configuration
 
-The SCADA communicates with the PLC over a **direct Ethernet connection** (no router or switch required). The PLC has a fixed static IP address; the PC running the SCADA must be on the same subnet for the TCP connection to succeed.
+By default the PLC hosts its own **WiFi access point** from inside the enclosure (no router or switch required) and runs a DHCP server, so the PC only has to join that network. The SCADA connects to the PLC's fixed address, which is also its default connection setting (editable from **Configuración**).
 
-#### PLC network settings
+#### PLC network settings (WiFi, default)
 
 | Parameter | Value |
 |---|---|
-| IP address | `192.168.1.1` |
+| SSID | `PolyConLab` (overridable per deployment in the firmware build flags) |
+| IP address | `192.168.4.1` |
 | Subnet mask | `255.255.255.0` |
 | Port | `80` (TCP) |
 
-#### PC Ethernet adapter settings
+The WiFi password is set in the firmware (`WIFI_AP_PASSWORD` in `lib/Definitions/Config.hpp`, overridable through PlatformIO `build_flags`). The PC gets its address from the PLC by DHCP — leave the WiFi adapter on *Automatic (DHCP)*.
 
-Assign the PC's Ethernet adapter a **static** IP address that is in the same `/24` subnet as the PLC. Any address in the range `192.168.1.2` – `192.168.1.254` (other than `192.168.1.1`, which is the PLC) is valid. Example:
-
-| Parameter | Value |
-|---|---|
-| IP address | `192.168.1.100` |
-| Subnet mask | `255.255.255.0` |
-| Default gateway | *(leave blank)* |
-| DNS | *(leave blank)* |
-
-#### How to configure the adapter on Windows
-
-1. Open **Settings → Network & Internet → Ethernet → (your adapter) → Edit** (under "IP assignment").
-2. Switch the assignment from *Automatic (DHCP)* to **Manual**.
-3. Enable **IPv4** and fill in the values from the table above.
-4. Click **Save**.
-
-Alternatively, using PowerShell as **Administrator** (replace `"Ethernet"` with your adapter's actual name if different):
-
-```powershell
-netsh interface ip set address "Ethernet" static 192.168.1.100 255.255.255.0
-```
-
-> **Note:** This configuration only applies to the adapter connected to the PLC. Any other adapters (Wi-Fi, secondary Ethernet) are unaffected and can remain on DHCP.
+> **Ethernet builds:** if the firmware is built with `-DTRANSPORT_ETHERNET`, the PLC instead listens on `192.168.1.100` (`config::kEthernetIp`), port `80`. Give the PC's Ethernet adapter a static address in the same `/24` subnet (e.g. `192.168.1.10`, mask `255.255.255.0`, no gateway) and set the SCADA's IP to `192.168.1.100` in **Configuración**.
 
 #### Verifying the Connection
 
-Once the adapter is configured, verify connectivity before launching the SCADA:
+Once the PC has joined the PLC's network, verify connectivity before launching the SCADA:
 
 ```powershell
-ping 192.168.1.1
+ping 192.168.4.1
 ```
 
-If the PLC is powered and the Ethernet link is up, you should receive replies. If the ping times out, double-check the cable, the adapter settings, and that the PLC firmware is running.
+If the PLC is powered and the firmware is running, you should receive replies. If the ping times out, check that the PC is connected to the PLC's WiFi network (not another one) and that the PLC firmware is running.
 
 ---
 
