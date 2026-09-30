@@ -32,6 +32,7 @@ class _EnabledControls:
     ack:       bool = False
     retry:     bool = False
     reinit:    bool = False
+    actuator_queries: bool = False  # the FW answers OUTP:...? here, so the rows can show real states
 
 
 STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
@@ -40,8 +41,8 @@ STATE_CONTROLS: dict[ScadaState, _EnabledControls] = {
     ScadaState.INITIALIZING:  _EnabledControls(),
     ScadaState.STARTUP:       _EnabledControls(),
     ScadaState.CHECKUP:       _EnabledControls(),
-    ScadaState.MANUAL:        _EnabledControls(sensors=True, actuators=True, pause=True, stop=True),
-    ScadaState.PAUSE:         _EnabledControls(resume=True, stop=True),
+    ScadaState.MANUAL:        _EnabledControls(sensors=True, actuators=True, pause=True, stop=True, actuator_queries=True),
+    ScadaState.PAUSE:         _EnabledControls(resume=True, stop=True, actuator_queries=True),
     ScadaState.SOFT_ERROR:    _EnabledControls(ack=True, retry=True, reinit=True),
     ScadaState.HARD_ERROR:    _EnabledControls(),
     ScadaState.SHUTDOWN:      _EnabledControls(),

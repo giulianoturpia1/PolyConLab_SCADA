@@ -18,25 +18,15 @@ without tearing down the TCP connection.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from comms.plc_client import PlcClient
 from comms.protocol import Evt, State
-from config.polling import HANDSHAKE_PROBE_TIMEOUT_MS, HANDSHAKE_SETTLE_MS
-from models import Sensor
-
-# ── Human-readable sensor labels (Spanish UI) ────────────────────────────────
-
-_SENSOR_LABEL: dict[Sensor, str] = {
-    Sensor.TEMP_IN: "T. Entrada",
-    Sensor.TEMP_OUT: "T. Salida",
-    Sensor.TEMP_BATH: "T. Camisa",
-    Sensor.TEMP_MIX: "T. Mezcla",
-    Sensor.FLOW: "Caudal",
-    Sensor.LEVEL: "Nivel",
-}
+from config.polling import HANDSHAKE_PROBE_TIMEOUT_MS, HANDSHAKE_SETTLE_MS, PENDING_TTL_MS
+from models import SENSOR_LABEL, Sensor
 
 
 class PlcHandshake(QObject):
@@ -64,6 +54,13 @@ class PlcHandshake(QObject):
         self._probe_timer.setSingleShot(True)
         self._probe_timer.setInterval(HANDSHAKE_PROBE_TIMEOUT_MS)
         self._probe_timer.timeout.connect(self._on_probe_timeout)
+
+        # A STATE? reply that never comes (PLC silent, reply lost) must end the sequence instead of
+        # leaving it running forever; the client drops the command after PENDING_TTL_MS, so wait as long.
+        self._state_timer = QTimer(self)
+        self._state_timer.setSingleShot(True)
+        self._state_timer.setInterval(PENDING_TTL_MS)
+        self._state_timer.timeout.connect(self._on_state_timeout)
 
         # Live STATE? listener, if any, plus an epoch that invalidates in-flight
         # work (pending listener, settle timers) when a sequence is cancelled.
@@ -137,13 +134,12 @@ class PlcHandshake(QObject):
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _disconnect_state_slot(self) -> None:
-        """Drop the pending STATE? listener, if any. Idempotent."""
+        """Drop the pending STATE? listener, if any, and its timeout. Idempotent."""
+        self._state_timer.stop()
         if self._state_slot is None:
             return
-        try:
+        with contextlib.suppress(RuntimeError):  # already disconnected (e.g. object deleted)
             self._plc.state_received.disconnect(self._state_slot)
-        except RuntimeError:
-            pass  # already disconnected (e.g. object deleted)
         self._state_slot = None
 
     def _query_state(self, callback: Callable[[str], None]) -> None:
@@ -163,6 +159,7 @@ class PlcHandshake(QObject):
 
         self._state_slot = one_shot
         self._plc.state_received.connect(one_shot)
+        self._state_timer.start()
 
         if not self._plc.query_state():
             self._disconnect_state_slot()
@@ -235,6 +232,9 @@ class PlcHandshake(QObject):
     def _on_probe_timeout(self) -> None:
         self._finish(False, "Tiempo de espera agotado verificando sensores.")
 
+    def _on_state_timeout(self) -> None:
+        self._finish(False, "Sin respuesta del PLC al consultar estado.")
+
     def _on_probe_done(self, results: dict[Sensor, bool]) -> None:
         """Evaluate sensor probe results and complete the handshake accordingly.
 
@@ -250,7 +250,7 @@ class PlcHandshake(QObject):
         for sensor, ok in results.items():
             self.sensor_result.emit(sensor, ok)
 
-        failed = [_SENSOR_LABEL[s] for s, ok in results.items() if not ok]
+        failed = [SENSOR_LABEL[s] for s, ok in results.items() if not ok]
 
         if failed:
             names = ", ".join(failed)

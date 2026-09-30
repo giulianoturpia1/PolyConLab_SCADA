@@ -14,9 +14,12 @@ from PySide6.QtWidgets import (
 
 from ui.style import metrics as m
 from ui.style import palette as col
-from ui.style.anim import SENSOR_VALUE_FADE_MS, Fade
+from ui.style.anim import SENSOR_VALUE_FADE_FROM, SENSOR_VALUE_FADE_MS, Fade
 
-# ── Sizing / timing constants ─────────────────────────────────────────────────
+
+def _value_style(color: str) -> str:
+    """Stylesheet of the big value label, in *color*."""
+    return f"background:transparent;border:none;color:{color};font-size:{m.SENSOR_VALUE_FONT_PX}px;font-weight:bold;"
 
 
 class SensorCard(QFrame):
@@ -41,24 +44,25 @@ class SensorCard(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(8, 6, 8, 6)
-        lay.setSpacing(1)
+        lay.setContentsMargins(*m.SENSOR_CARD_MARGINS)
+        lay.setSpacing(m.SENSOR_CARD_SPACING_PX)
 
         self._lbl_title = QLabel(title.upper())
         self._lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._lbl_title.setStyleSheet(
-            f"background:transparent;border:none;color:{col.TEXT};font-size:9px;letter-spacing:1px;"
+            f"background:transparent;border:none;color:{col.TEXT};font-size:{m.SENSOR_TITLE_FONT_PX}px;"
+            f"letter-spacing:{m.SENSOR_TITLE_LETTER_SPACING_PX}px;"
         )
 
         self._val = QLabel("--")
         self._val.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._val.setStyleSheet(
-            f"background:transparent;border:none;color:{col.WHITE};font-size:22px;font-weight:bold;"
-        )
+        self._val.setStyleSheet(_value_style(col.WHITE))
 
         self._lbl_unit = QLabel(unit)
         self._lbl_unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._lbl_unit.setStyleSheet(f"background:transparent;border:none;color:{col.TEXT};font-size:10px;")
+        self._lbl_unit.setStyleSheet(
+            f"background:transparent;border:none;color:{col.TEXT};font-size:{m.SENSOR_UNIT_FONT_PX}px;"
+        )
 
         lay.addWidget(self._lbl_title)
         lay.addWidget(self._val)
@@ -81,8 +85,8 @@ class SensorCard(QFrame):
             self.setStyleSheet(f"""
                 QFrame {{
                     background-color: {col.PANEL};
-                    border: 2px solid {col.RED};
-                    border-radius: 8px;
+                    border: {m.THICK_BORDER_PX}px solid {col.RED};
+                    border-radius: {m.SENSOR_CARD_RADIUS_PX}px;
                 }}
             """)
         elif self._polling_enabled:
@@ -90,8 +94,8 @@ class SensorCard(QFrame):
             self.setStyleSheet(f"""
                 QFrame {{
                     background-color: {col.PANEL};
-                    border: 1px solid {col.GREEN};
-                    border-radius: 8px;
+                    border: {m.BORDER_PX}px solid {col.GREEN};
+                    border-radius: {m.SENSOR_CARD_RADIUS_PX}px;
                 }}
             """)
         elif self._interactive:
@@ -99,8 +103,8 @@ class SensorCard(QFrame):
             self.setStyleSheet(f"""
                 QFrame {{
                     background-color: {col.PANEL};
-                    border: 1px solid {col.BORDER};
-                    border-radius: 8px;
+                    border: {m.BORDER_PX}px solid {col.BORDER};
+                    border-radius: {m.SENSOR_CARD_RADIUS_PX}px;
                 }}
                 QFrame:hover {{
                     border-color: {col.TEXT};
@@ -111,8 +115,8 @@ class SensorCard(QFrame):
             self.setStyleSheet(f"""
                 QFrame {{
                     background-color: {col.PANEL};
-                    border: 1px solid {col.BORDER};
-                    border-radius: 8px;
+                    border: {m.BORDER_PX}px solid {col.BORDER};
+                    border-radius: {m.SENSOR_CARD_RADIUS_PX}px;
                 }}
             """)
 
@@ -132,8 +136,8 @@ class SensorCard(QFrame):
     def set_value(self, v: str, color: str = col.WHITE) -> None:
         """Update the displayed value and play a fade-in to signal the change."""
         self._val.setText(v)
-        self._val.setStyleSheet(f"background:transparent;border:none;color:{color};font-size:22px;font-weight:bold;")
-        self._val_fade.play(0.15, 1.0)
+        self._val.setStyleSheet(_value_style(color))
+        self._val_fade.play(SENSOR_VALUE_FADE_FROM)
 
     @property
     def is_polling(self) -> bool:

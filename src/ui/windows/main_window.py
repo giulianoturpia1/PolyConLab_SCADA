@@ -8,7 +8,7 @@ from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
 from config.data import EXPORT_DEFAULT_ROWS, EXPORT_MAX_ROWS
 from config.network import DEFAULT_HOST, DEFAULT_PORT
-from models import Device, Sensor
+from models import SENSOR_LABEL, SENSOR_UNIT, Device, Sensor
 from ui.actuator_panel import ActuatorPanel
 from ui.main_window_ui import Ui_MainWindow
 from ui.measurement_log import MeasurementLog
@@ -28,15 +28,11 @@ from utils import resource_path
 
 _LOGO_PATH = resource_path("assets", "images", "logo.png")
 
-# ── UI sizing constants ───────────────────────────────────────────────────────
-
-# ── Connection label stylesheet values ───────────────────────────────────────
-
 
 class MainWindow(QMainWindow):
-    """Top-level window: builds the UI, wires the collaborators, and owns the menu,
+    """Top-level window: builds the UI, wires the collaborators, and owns the menu.
 
-    the log/CSV export, and the connection-indicator chrome.  All SCADA decision
+    It also owns the log/CSV export and the connection-indicator chrome.  All SCADA decision
     logic lives in :class:`~ui.scada_controller.ScadaController`; the panels own
     their widgets; this class only composes and paints its own header.
     """
@@ -68,7 +64,7 @@ class MainWindow(QMainWindow):
             self._ui.btn_temp_control, self._ui.heater_spinbox, self._ui.heater_slider, self._plc, self
         )
         self._recovery_bar = RecoveryActionBar(
-            self._ui.btn_pause, self._ui.btn_resume, self._ui.btn_estop, self._ui.btn_ack, self._ui.btn_retry, self._ui.btn_reinit, self
+            self._ui.btn_pause, self._ui.btn_estop, self._ui.btn_ack, self._ui.btn_retry, self._ui.btn_reinit, self
         )
 
         # The controller owns the state machine and drives the collaborators above.
@@ -91,13 +87,6 @@ class MainWindow(QMainWindow):
 
     def _configure_widgets(self) -> None:
         """Set labels on promoted widgets and build the reference dicts for the panels."""
-        self._ui.card_tin.configure("T. Entrada", "°C")
-        self._ui.card_tout.configure("T. Salida", "°C")
-        self._ui.card_tcam.configure("T. Camisa", "°C")
-        self._ui.card_tmez.configure("T. Mezcla", "°C")
-        self._ui.card_flow.configure("Caudal", "L/min")
-        self._ui.card_lvl.configure("Nivel", "")
-
         self._ui.row_heater.configure("Calentador")
         self._ui.row_pump.configure("Bomba")
         self._ui.row_mixer.configure("Mezclador")
@@ -120,6 +109,8 @@ class MainWindow(QMainWindow):
             Sensor.FLOW: self._ui.card_flow,
             Sensor.LEVEL: self._ui.card_lvl,
         }
+        for sensor, card in self._cards.items():
+            card.configure(SENSOR_LABEL[sensor], SENSOR_UNIT[sensor])
 
         # Owns the FSM state label: text, colour, and fade on every change.
         self._state_label = StateLabel(self._ui.lbl_state)
@@ -148,7 +139,10 @@ class MainWindow(QMainWindow):
         # ── Menu ──────────────────────────────────────────────────────────────
         self._ui.action_log.triggered.connect(self._toggle_log)
         self._ui.action_connection.triggered.connect(self._open_settings)
-        self._ui.action_download.triggered.connect(self._download_data)
+        # Through a lambda: triggered(bool) would otherwise pass its checked flag as default_limit.
+        self._ui.action_download.triggered.connect(lambda: self._download_data())
+        self._ui.action_link_stats.triggered.connect(self._show_link_stats)
+        self._ui.btn_reset_measurements.clicked.connect(self._reset_measurements)
 
         # ── Connection button → controller ─────────────────────────────────────
         self._ui.btn_connect.clicked.connect(lambda: self._controller.toggle_connection(self._host, self._port))
@@ -159,6 +153,7 @@ class MainWindow(QMainWindow):
         self._log_win.message_send.connect(self._on_log_message)
 
         # ── Log routing from the collaborators ──────────────────────────────────
+        self._sensor_panel.log.connect(self.log)
         self._actuator_panel.log.connect(self.log)
         self._temp_control.log.connect(self.log)
         self._controller.log.connect(self.log)
@@ -179,12 +174,29 @@ class MainWindow(QMainWindow):
             self._log_win.show()
 
     def _open_settings(self) -> None:
-        """Open the connection settings dialog and store the new host/port."""
-        dlg = SettingsDialog(self._host, self._port, self)
-        if dlg.exec():
-            self._host = dlg.host()
-            self._port = dlg.port()
-            self.log(f"Configuración Actualizada: {self._host}:{self._port}.")
+        """Open the settings dialog; store the new host/port and apply the sampling period at once."""
+        recommended_min = PlcClient.recommended_min_period_ms()
+        dlg = SettingsDialog(self._host, self._port, self._plc.sample_period_ms, recommended_min, self)
+        if not dlg.exec():
+            return
+        self._host = dlg.host()
+        self._port = dlg.port()
+        self.log(f"Configuración Actualizada: {self._host}:{self._port}.")
+
+        period = dlg.sample_period_ms()
+        if period != self._plc.sample_period_ms:
+            if self._plc.is_connected:
+                # Close the previous period's statistics window before a new one starts.
+                self.log(self._plc.link_stats_summary())
+            self._plc.set_sample_period(period)
+            self.log(f"Período de Muestreo: {period} ms.")
+            if period < recommended_min:
+                self.log(f"Aviso: por debajo del mínimo recomendado ({recommended_min} ms).")
+
+    def _show_link_stats(self) -> None:
+        """Write the link statistics since the last connect or period change to the log, and show it."""
+        self.log(self._plc.link_stats_summary())
+        self._toggle_log()
 
     # ── Connection-indicator chrome ───────────────────────────────────────────────
 
@@ -210,31 +222,68 @@ class MainWindow(QMainWindow):
 
     # ── Misc slots ────────────────────────────────────────────────────────────────
 
-    def _download_data(self) -> None:
+    def _reset_measurements(self) -> None:
+        """Discard the chart and the recorded measurements after confirming; time restarts at 0 s.
+
+        Offers to download the data first, since the discarded rows cannot be recovered.
+        """
+        rows = self._log.row_count
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Reiniciar Mediciones")
+        box.setText(f"Se descartarán el gráfico y las {rows} mediciones registradas.")
+        box.setInformativeText("Esta acción no se puede deshacer. El tiempo del gráfico vuelve a 0 s.")
+        btn_download = box.addButton("Descargar y reiniciar", QMessageBox.ButtonRole.AcceptRole)
+        btn_discard = box.addButton("Descartar y reiniciar", QMessageBox.ButtonRole.DestructiveRole)
+        btn_cancel = box.addButton("Cancelar", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(btn_cancel)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is btn_download:
+            if not self._download_data(default_limit=rows):
+                self.log("Reinicio de mediciones cancelado: no se guardaron los datos.")
+                return
+        elif clicked is not btn_discard:
+            return
+
+        self._chart.clear()
+        self._log.clear()
+        self.log(f"Mediciones reiniciadas ({rows} descartadas).")
+
+    def _download_data(self, default_limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Export a configurable number of measurements to CSV on the user's computer.
 
-        Prompts the user for how many measurements to save (default EXPORT_DEFAULT_ROWS).
+        Prompts the user for how many measurements to save (*default_limit*, EXPORT_DEFAULT_ROWS
+        from the menu). Returns True only if a file was written.
         """
         limit, ok = QInputDialog.getInt(
-            self, "Cantidad de mediciones", "Número de mediciones a guardar:", EXPORT_DEFAULT_ROWS, 1, EXPORT_MAX_ROWS, 1
+            self,
+            "Cantidad de mediciones",
+            "Número de mediciones a guardar:",
+            max(1, min(default_limit, EXPORT_MAX_ROWS)),
+            1,
+            EXPORT_MAX_ROWS,
+            1,
         )
         if not ok:
-            return
+            return False
 
         default_name = f"mediciones_{QDateTime.currentDateTime().toString('yyyyMMdd_hhmmss')}.csv"
         file_path, _ = QFileDialog.getSaveFileName(
             self,
-            "Guardar datos",
+            "Guardar Datos",
             default_name,
             "Archivos CSV (*.csv)",
         )
         if not file_path:
-            return
+            return False
 
         if self._log.export_csv(file_path, limit=limit):
             self.log(f"Datos descargados en {file_path} ({limit} filas).")
-        else:
-            QMessageBox.information(self, "Sin datos", "No hay mediciones disponibles para descargar.")
+            return True
+        QMessageBox.information(self, "Sin Datos", "No hay mediciones disponibles para descargar.")
+        return False
 
     def _on_log_message(self, msg: str) -> None:
         """Send a raw message typed in the log window to the PLC."""

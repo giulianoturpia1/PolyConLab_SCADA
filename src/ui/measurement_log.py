@@ -1,17 +1,10 @@
 """Measurement log: records temperature readings alongside confirmed system status.
 
-Replaces the private history :class:`~ui.widgets.temperature_chart.TemperatureChart`
-used to keep for CSV export. Unlike the chart, this module can see system status —
-not because the chart's history was wrong, but because recording status alongside
-temperature readings is a job that belongs to the log, not to a plotting widget.
-it listens to :class:`~comms.plc_client.PlcClient` actuator, temp-control and FSM
-state signals and stamps every recorded row with the last confirmed value of each.
-
-Actuator and temp-control status are event-driven: the PLC confirms a new state only
-when it changes, and nothing polls the actuators periodically (see PlcClient). Until
-the first confirmation arrives for a given session, that status is unknown — recording
-it as OFF/CLOSED would be assuming a PLC state this codebase never assumes, so an
-unknown status is written to the CSV as an empty cell instead.
+Listens to :class:`~comms.plc_client.PlcClient` actuator, temp-control and FSM state
+signals and stamps every recorded row with the last confirmed value of each. Until the
+PLC first confirms a value in a session it is unknown — recording it as OFF/CLOSED would
+be assuming a PLC state this codebase never assumes — so an unknown status is written
+to the CSV as an empty cell instead.
 """
 
 from __future__ import annotations
@@ -26,17 +19,14 @@ from PySide6.QtCore import QObject
 from comms.plc_client import PlcClient
 from comms.protocol import Resp
 from config.data import EXPORT_DEFAULT_ROWS, LOG_MAX_ROWS
-from models import Device
+from models import SENSOR_LABEL, Device, Sensor
 
-# CSV column headers, in the exact order written by export_csv(). The first five
-# columns are byte-identical to the legacy TemperatureChart.export_history() output
-# so existing consumers of the file keep working; the rest are appended on the right.
+# CSV column headers, in the exact order written by export_csv(). New columns are
+# appended on the right so existing consumers of the file keep working.
+_TEMP_COLUMNS = (Sensor.TEMP_IN, Sensor.TEMP_OUT, Sensor.TEMP_BATH, Sensor.TEMP_MIX)
 _CSV_HEADER = [
     "Timestamp",
-    "T. Entrada",
-    "T. Salida",
-    "T. Camisa",
-    "T. Mezcla",
+    *(SENSOR_LABEL[s] for s in _TEMP_COLUMNS),
     "Estado",
     "Calefactor",
     "Bomba",
@@ -102,15 +92,24 @@ class MeasurementLog(QObject):
         self._rows.append(
             {
                 "timestamp": datetime.now().isoformat(),
-                "T. Entrada": tin,
-                "T. Salida": tout,
-                "T. Camisa": tcam,
-                "T. Mezcla": tmez,
+                Sensor.TEMP_IN: tin,
+                Sensor.TEMP_OUT: tout,
+                Sensor.TEMP_BATH: tcam,
+                Sensor.TEMP_MIX: tmez,
                 "state": self._fsm_state,
                 "actuators": dict(self._actuator_state),
                 "temp_control": self._temp_control,
             }
         )
+
+    @property
+    def row_count(self) -> int:
+        """Number of rows currently recorded."""
+        return len(self._rows)
+
+    def clear(self) -> None:
+        """Discard every recorded row. The confirmed-status snapshot is kept: it is still the PLC's truth."""
+        self._rows.clear()
 
     def export_csv(self, path: str | Path, limit: int = EXPORT_DEFAULT_ROWS) -> bool:
         """Write the last *limit* recorded rows to *path* as CSV; return False if there are none.
@@ -153,7 +152,7 @@ class MeasurementLog(QObject):
 
     def _reset_status(self) -> None:
         """Reset the confirmed-status snapshot to all-unknown."""
-        self._actuator_state: dict[Device, bool | None] = {dev: None for dev in Device}
+        self._actuator_state: dict[Device, bool | None] = dict.fromkeys(Device)
         self._temp_control: bool | None = None
         self._fsm_state: str | None = None
 
@@ -162,10 +161,7 @@ class MeasurementLog(QObject):
         actuators: dict[Device, bool | None] = row["actuators"]  # type: ignore[assignment]
         cells = [
             row["timestamp"],
-            self._format_temp(row["T. Entrada"]),
-            self._format_temp(row["T. Salida"]),
-            self._format_temp(row["T. Camisa"]),
-            self._format_temp(row["T. Mezcla"]),
+            *(self._format_temp(row[s]) for s in _TEMP_COLUMNS),
             row["state"] or "",
         ]
         cells.extend(self._format_devices(actuators, _DEVICE_COLUMNS))

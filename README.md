@@ -218,6 +218,8 @@ PyInstaller will produce the standalone executable at:
 dist/PolyConLab_SCADA/PolyConLab_SCADA.exe
 ```
 
+The executable's icon (Explorer, shortcuts, taskbar) is `assets/images/app.ico`, a multi-size icon (16–256 px) made from `assets/images/logo.png`. To change the logo, replace both files and rebuild.
+
 > **Before your first build:** Run `python build_ui.py` to ensure all `.ui` files have been compiled to Python modules.
 
 ### 5.2. Creating the Installer with InstallForge
@@ -264,7 +266,7 @@ This is the most important step — it tells InstallForge what to bundle.
 
     1.1 Browse to `dist\PolyConLab_SCADA\` inside the repository root and select the folder inside it. It should be `_internal`.
 
-2. Click **Add Folder** in the toolbar.
+2. Click **Add File** in the toolbar.
 
     2.1 Browse to `dist\PolyConLab_SCADA\` and select the executable named `PolyConLab_SCADA.exe`.
 

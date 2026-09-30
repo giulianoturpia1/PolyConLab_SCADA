@@ -186,6 +186,10 @@ class ScadaController(QObject):
         plc_state = from_plc(raw)
         previous = self._scada_state
         self._transition(plc_state)
+        if plc_state == previous and STATE_CONTROLS[plc_state].actuator_queries:
+            # Re-read the actuators with every state poll: the FW also switches them on its own
+            # (temperature control, the temperature limit, safe outputs), and the rows must follow.
+            self._actuator_panel.reconcile()
         if previous == ScadaState.PAUSE and plc_state != ScadaState.PAUSE:
             self.log.emit(_RESUME_MESSAGE.get(plc_state, f"El PLC salió de PAUSE al estado «{raw}»."))
         if plc_state == ScadaState.CHECKUP and not self._init_seq.is_running:
@@ -233,12 +237,12 @@ class ScadaController(QObject):
         self._init_seq.reprobe_sensors()
 
     def _on_reinit(self) -> None:
-        """Re-initialise every currently faulted sensor on the PLC. No state Change occurs.
+        """Re-initialise every currently faulted sensor on the PLC. No state change occurs.
 
         Fires one SYST:REINIT command per faulted sensor over a snapshot of the
         set (the results mutate it as they arrive).  Re-init is a command, not a
         state event: cards clear as sensors recover, but the PLC stays in SOFT
-        ERROR — the operator then uses Reintentar Chequeo or Aceptar Falla to
+        ERROR — the operator then uses Reintentar Chequeo or Aceptar to
         leave it.
         """
         if not self._faulted:
@@ -263,9 +267,10 @@ class ScadaController(QObject):
     def _transition(self, new_state: ScadaState) -> None:
         """Move to a new SCADA state, apply control permissions, and reconcile on change.
 
-        On entry to MANUAL every control is re-synced from the PLC (never
-        assumed); on exit from MANUAL the temperature-control indicator is
-        cleared, because the FW disables that control outside MANUAL.
+        On entry to a state where the FW answers actuator queries the rows are
+        re-read from the PLC (never assumed); on exit from MANUAL the
+        temperature-control indicator is cleared, because the FW disables that
+        control outside MANUAL.
         """
         previous = self._scada_state
         self._scada_state = new_state
@@ -273,18 +278,13 @@ class ScadaController(QObject):
 
         if new_state == previous:
             return
-        if new_state == ScadaState.MANUAL:
-            self._reconcile_controls()
-        elif previous == ScadaState.MANUAL:
+        if STATE_CONTROLS[new_state].actuator_queries:
+            self._actuator_panel.reconcile()
+        else:
+            # The FW rejects actuator queries here: show unknown rather than a stale state.
+            self._actuator_panel.reset()
+        if previous == ScadaState.MANUAL:
             self._temp_control.clear()
-
-    def _reconcile_controls(self) -> None:
-        """Re-sync every control from the PLC on entry to MANUAL.
-
-        Delegates to the panels, which repaint only from the PLC's replies, so
-        the UI reflects the PLC and never a SCADA-side assumption.
-        """
-        self._actuator_panel.reconcile()
 
     def _apply_state_gating(self) -> None:
         """Enable or disable controls by looking up the current state in STATE_CONTROLS."""

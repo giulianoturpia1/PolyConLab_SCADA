@@ -23,3 +23,25 @@ class Sensor(Enum):
     TEMP_MIX = auto()
     FLOW = auto()
     LEVEL = auto()
+
+
+# Display name of each sensor (Spanish UI): card titles, chart legend, CSV header and log
+# messages all take it from here.
+SENSOR_LABEL: dict[Sensor, str] = {
+    Sensor.TEMP_IN: "T. Entrada",
+    Sensor.TEMP_OUT: "T. Salida",
+    Sensor.TEMP_BATH: "T. Camisa",
+    Sensor.TEMP_MIX: "T. Mezcla",
+    Sensor.FLOW: "Caudal",
+    Sensor.LEVEL: "Nivel",
+}
+
+# Unit shown under each sensor's reading ("" when the reading is a state, not a quantity).
+SENSOR_UNIT: dict[Sensor, str] = {
+    Sensor.TEMP_IN: "°C",
+    Sensor.TEMP_OUT: "°C",
+    Sensor.TEMP_BATH: "°C",
+    Sensor.TEMP_MIX: "°C",
+    Sensor.FLOW: "L/min",
+    Sensor.LEVEL: "",
+}

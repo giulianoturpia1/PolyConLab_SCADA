@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.style import metrics as m
 from ui.style import palette as col
 
 
@@ -34,30 +35,30 @@ class LogWindow(QWidget):
         self._draft: str = ""  # input saved when the user starts navigating up
         super().__init__(parent, Qt.WindowType.Window)
         self.setWindowTitle("Log del Sistema")
-        self.resize(800, 490)
+        self.resize(m.LOG_WINDOW_W_PX, m.LOG_WINDOW_H_PX)
         self.setStyleSheet(f"""
             QWidget {{
                 background-color: {col.BG};
                 color: {col.WHITE};
-                font-family: 'Segoe UI', Arial, sans-serif;
-                font-size: 13px;
+                font-family: {m.FONT_UI};
+                font-size: {m.DIALOG_FONT_PX}px;
             }}
             QPlainTextEdit {{
-                background-color: #151820;
-                color: #7E8898;
-                border: 1px solid {col.BORDER};
-                border-radius: 4px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 11px;
+                background-color: {col.CONSOLE_BG};
+                color: {col.CONSOLE_TEXT};
+                border: {m.BORDER_PX}px solid {col.BORDER};
+                border-radius: {m.CONTROL_RADIUS_PX}px;
+                font-family: {m.FONT_MONO};
+                font-size: {m.SMALL_FONT_PX}px;
             }}
             QLineEdit {{
-                background-color: #151820;
+                background-color: {col.CONSOLE_BG};
                 color: {col.WHITE};
-                border: 1px solid {col.BORDER};
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-family: 'Consolas', 'Courier New', monospace;
-                font-size: 12px;
+                border: {m.BORDER_PX}px solid {col.BORDER};
+                border-radius: {m.CONTROL_RADIUS_PX}px;
+                padding: {m.INPUT_PADDING};
+                font-family: {m.FONT_MONO};
+                font-size: {m.CONTROL_FONT_PX}px;
             }}
             QLineEdit:focus {{
                 border-color: {col.BLUE};
@@ -65,21 +66,21 @@ class LogWindow(QWidget):
             QPushButton {{
                 background-color: {col.PANEL};
                 color: {col.WHITE};
-                border: 1px solid {col.BORDER};
-                border-radius: 4px;
-                padding: 6px 12px;
-                font-size: 12px;
+                border: {m.BORDER_PX}px solid {col.BORDER};
+                border-radius: {m.CONTROL_RADIUS_PX}px;
+                padding: {m.LOG_BUTTON_PADDING};
+                font-size: {m.CONTROL_FONT_PX}px;
             }}
             QPushButton:hover {{
-                background-color: #353A47;
+                background-color: {col.PANEL_HOVER};
                 border-color: {col.BLUE};
             }}
             QPushButton:pressed {{
-                background-color: #23272E;
+                background-color: {col.PRESSED};
             }}
             QLabel#cmd_label {{
                 color: {col.GRAY};
-                font-size: 11px;
+                font-size: {m.SMALL_FONT_PX}px;
             }}
         """)
         self._build_ui()
@@ -87,8 +88,8 @@ class LogWindow(QWidget):
     def _build_ui(self) -> None:
         """Create the log view, command bar, and clear button."""
         root = QVBoxLayout(self)
-        root.setContentsMargins(10, 10, 10, 10)
-        root.setSpacing(6)
+        root.setContentsMargins(m.LOG_MARGIN_PX, m.LOG_MARGIN_PX, m.LOG_MARGIN_PX, m.LOG_MARGIN_PX)
+        root.setSpacing(m.LOG_SPACING_PX)
 
         self._log_view = QPlainTextEdit()
         self._log_view.setReadOnly(True)
@@ -98,7 +99,7 @@ class LogWindow(QWidget):
         cmd_row = QHBoxLayout()
         cmd_label = QLabel("CMD")
         cmd_label.setObjectName("cmd_label")
-        cmd_label.setFixedWidth(32)
+        cmd_label.setFixedWidth(m.LOG_CMD_LABEL_W_PX)
         cmd_row.addWidget(cmd_label)
 
         self._cmd_input = QLineEdit()
@@ -108,7 +109,7 @@ class LogWindow(QWidget):
         cmd_row.addWidget(self._cmd_input)
 
         btn_send = QPushButton("Enviar")
-        btn_send.setFixedWidth(70)
+        btn_send.setFixedWidth(m.LOG_SEND_BTN_W_PX)
         btn_send.clicked.connect(self._send_message)
         cmd_row.addWidget(btn_send)
 
@@ -118,7 +119,7 @@ class LogWindow(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         btn_clear = QPushButton("Limpiar")
-        btn_clear.setFixedWidth(80)
+        btn_clear.setFixedWidth(m.LOG_CLEAR_BTN_W_PX)
         btn_clear.clicked.connect(self._log_view.clear)
         btn_row.addWidget(btn_clear)
         root.addLayout(btn_row)

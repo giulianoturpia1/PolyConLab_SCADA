@@ -98,6 +98,8 @@ class Evt:
     * :attr:`FAULT_RECOVERABLE` — at least one sensor probe failed; PLC goes to SOFT ERROR.
     """
 
+    PREFIX = "EVT:"  # every event line starts with this; the PLC answers an event only to reject it
+
     # Initialisation handshake
     INIT_OK = "EVT:INIT OK"
     SCADA_OK = "EVT:SCADA OK"
@@ -203,6 +205,22 @@ def parse_value(line: str) -> float | None:
     """
     try:
         return float(line)
+    except ValueError:
+        return None
+
+
+class ErrCode:
+    """Numeric codes of the firmware error replies the SCADA reacts to specifically."""
+
+    BUSY = -106  # every command slot was taken; the command was not executed
+
+
+def error_code(response: str) -> int | None:
+    """Numeric code of a firmware error reply (e.g. -106 for "-106,'BUSY'"), or None if not an error."""
+    if not is_error(response):
+        return None
+    try:
+        return int(response.lstrip().split(",", 1)[0])
     except ValueError:
         return None
 

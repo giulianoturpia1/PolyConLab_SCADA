@@ -22,8 +22,14 @@ GRAY = "#5C6370"
 # ── Derived / hover colours ───────────────────────────────────────────────────
 # Slightly darker green — used as hover for active (ON) actuator buttons.
 GREEN_HOVER = "#45A060"
-# Slightly lighter panel — used as hover for inactive actuator buttons.
+# Slightly lighter panel — hover for inactive actuator buttons and dialog buttons.
 PANEL_HOVER = "#353A47"
+# Darker than BG — a dialog button while pressed.
+PRESSED = "#23272E"
+# Darkest background — the log view and the command input of the log window.
+CONSOLE_BG = "#151820"
+# Dim gray-blue — log text, quieter than TEXT so the log reads as secondary.
+CONSOLE_TEXT = "#7E8898"
 # Slightly lighter gray — used as hover for active (OFF) actuator buttons.
 GRAY_HOVER = "#6B7280"
 # Amber — warm orange used for the SOFT ERROR firmware state.
