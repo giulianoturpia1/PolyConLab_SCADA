@@ -17,7 +17,7 @@ from math import ceil
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.link_stats import LinkStats
-from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Evt, Resp, error_code, is_error, parse_value
+from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Resp, error_code, is_error, parse_value
 from config.polling import (
     FW_APP_TICK_MS,
     FW_SM_TICK_MS,
@@ -173,21 +173,16 @@ class PlcClient(QObject):
         self._request(spec.on_cmd if on else spec.off_cmd, partial(self._resolve_actuator, dev, on, expected))
 
     def send_event(self, evt: str) -> bool:
-        """Send a state-machine event line (``EVT:…``). Returns False if not connected."""
-        return self._send_line(evt)
+        """Queue a state-machine event line (``EVT:…``) like a command. Returns False if not connected."""
+        return self._request(evt, self._resolve_event)
 
     def send_raw(self, text: str) -> bool:
         """Send an arbitrary line typed in the log terminal. Returns False if not connected.
 
-        A command is queued like any other, so its reply is matched to it (and shown in the log)
-        instead of being taken by whichever poll happens to be waiting, and it respects the
-        in-flight limit. An event (``EVT:...``) is written directly: the PLC only answers an event
-        when it rejects it, so there is no reply to wait for.
+        Commands and events are queued like any other, so the reply is matched to the line (and
+        shown in the log) instead of being taken by whichever poll happens to be waiting.
         """
-        line = text.strip()
-        if line.upper().startswith(Evt.PREFIX):
-            return self._send_line(line)
-        return self._request(line, self._resolve_raw)
+        return self._request(text.strip(), self._resolve_raw)
 
     def set_sensor_enabled(self, sensor: Sensor, enabled: bool) -> None:
         """Include or exclude a sensor from the periodic poll round."""
@@ -404,6 +399,11 @@ class PlcClient(QObject):
     def _resolve_raw(line: str) -> bool:
         """Accept whatever reply comes back for a terminal command; the log shows it as it arrived."""
         return True
+
+    @staticmethod
+    def _resolve_event(line: str) -> bool:
+        """Consume OK or an error; a rejection shows in the log and the STATE? poll reconciles."""
+        return line == Resp.OK or is_error(line)
 
     def _resolve_state(self, line: str) -> bool:
         """Emit the reply as the FSM state name; consume an error reply without reporting a state.

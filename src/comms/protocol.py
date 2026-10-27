@@ -98,7 +98,7 @@ class Evt:
     * :attr:`FAULT_RECOVERABLE` — at least one sensor probe failed; PLC goes to SOFT ERROR.
     """
 
-    PREFIX = "EVT:"  # every event line starts with this; the PLC answers an event only to reject it
+    PREFIX = "EVT:"  # every event line starts with this; the PLC answers OK or an error
 
     # Initialisation handshake
     INIT_OK = "EVT:INIT OK"
@@ -142,7 +142,7 @@ class Resp:
     HIGH = "HIGH"
     LOW = "LOW"
     PONG = "PONG"
-    OK = "OK"  # positive reply to a SYST:REINIT command
+    OK = "OK"  # positive reply to a SYST:REINIT command or an event
 
 
 class State:
