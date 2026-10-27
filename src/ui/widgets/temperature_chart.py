@@ -21,6 +21,7 @@ from time import monotonic
 from PySide6.QtCharts import QChart, QChartView, QLineSeries, QValueAxis
 from PySide6.QtCore import QObject, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtWidgets import QGraphicsView
 
 from config.data import CHART_TEMP_MAX_C, CHART_TEMP_MIN_C, CHART_WINDOW_S
 from models import SENSOR_LABEL, Sensor
@@ -55,6 +56,8 @@ class TemperatureChart(QObject):
             self._segments.append([self._new_segment(idx, owns_legend=True)])
         chart_view.setChart(self._chart)
         chart_view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # Partial repaints left trails of the old points as the window slid.
+        chart_view.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
 
     # ── Internal setup ───────────────────────────────────────────────────────
 
