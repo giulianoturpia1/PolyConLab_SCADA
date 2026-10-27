@@ -9,11 +9,15 @@ the link drops (the FW resets the control on every entry to MANUAL).
 
 from __future__ import annotations
 
+from math import ceil, floor
+
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QAbstractButton, QAbstractSlider, QSpinBox
 
 from comms.plc_client import PlcClient
 from comms.protocol import Cmd
+from config.data import DEFAULT_TEMP_LIMITS
+from models import TempLimits
 from ui.style import metrics as m
 from ui.style import palette as col
 
@@ -46,6 +50,7 @@ class TemperatureControl(QObject):
         self._slider = slider
         self._plc = plc
         self._requested = False  # control state last confirmed by the PLC
+        self.set_limits(DEFAULT_TEMP_LIMITS)
 
         self._button.clicked.connect(self._on_clicked)
         # The PLC confirms each toggle with the control state it settled on; the indicator follows that.
@@ -58,6 +63,12 @@ class TemperatureControl(QObject):
         self._slider.setEnabled(enabled)
         self._spinbox.setEnabled(enabled)
         self._button.setEnabled(enabled)
+
+    def set_limits(self, limits: TempLimits) -> None:
+        """Restrict the slider and spinbox to the setpoint range the PLC accepts (whole degrees inside it)."""
+        low, high = ceil(limits.setpoint_min), floor(limits.setpoint_max)
+        self._slider.setRange(low, high)
+        self._spinbox.setRange(low, high)
 
     def clear(self) -> None:
         """Force the request indicator off — on leaving MANUAL or disconnect."""

@@ -17,7 +17,18 @@ from math import ceil
 from PySide6.QtCore import QDateTime, QObject, QTimer, Signal
 
 from comms.link_stats import LinkStats
-from comms.protocol import ACTUATORS, REINIT, SENSORS, Cmd, ErrCode, Resp, error_code, is_error, parse_value
+from comms.protocol import (
+    ACTUATORS,
+    REINIT,
+    SENSORS,
+    Cmd,
+    ErrCode,
+    Resp,
+    error_code,
+    is_error,
+    parse_temp_limits,
+    parse_value,
+)
 from config.polling import (
     FW_APP_TICK_MS,
     FW_SM_TICK_MS,
@@ -69,6 +80,7 @@ class PlcClient(QObject):
     sensor_fault = Signal(object)  # (Sensor) — sensor reply was an error
     sensor_reinit_result = Signal(object, bool)  # (Sensor, ok) — reply to a SYST:REINIT command
     temp_control_changed = Signal(bool)  # (on) — PLC's control state after a TEMP:SET:IN toggle
+    temp_limits_received = Signal(object)  # (TempLimits | None) — reply to TEMP:LIM?; None if the PLC refused it
 
     # Diagnostic / init events.
     state_received = Signal(str)  # reply to a STATE? query — carries the raw state name string
@@ -236,6 +248,10 @@ class PlcClient(QObject):
         to be at the head of the queue.
         """
         return self._request(Cmd.temp_set_in(value), self._resolve_temp_control)
+
+    def query_temp_limits(self) -> bool:
+        """Ask the PLC for its temperature limits; the reply surfaces as :attr:`temp_limits_received`."""
+        return self._request(Cmd.TEMP_LIM, self._resolve_temp_limits, quiet=True)
 
     def probe_sensors(self, on_done: Callable[[dict[Sensor, bool]], None]) -> bool:
         """Query every sensor once and report pass/fail per sensor via *on_done*.
@@ -436,6 +452,17 @@ class PlcClient(QObject):
         if is_error(line):
             return True
         return False
+
+    def _resolve_temp_limits(self, line: str) -> bool:
+        """Report the PLC's limits; an error (e.g. older firmware without TEMP:LIM?) reports None."""
+        if is_error(line):
+            self.temp_limits_received.emit(None)
+            return True
+        limits = parse_temp_limits(line)
+        if limits is None:
+            return False
+        self.temp_limits_received.emit(limits)
+        return True
 
     def _resolve_actuator(self, dev: Device, on: bool, expected: str, line: str) -> bool:
         """Confirm on the expected reply, reject on an error, ignore anything else."""

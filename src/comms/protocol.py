@@ -12,9 +12,10 @@ events, ``Resp`` for the canonical replies the PLC sends back.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
-from models import Device, Sensor
+from models import Device, Sensor, TempLimits
 
 
 class Cmd:
@@ -63,6 +64,7 @@ class Cmd:
     # LOCAL TOGGLE in ManualState and answers with the resulting control state
     # (ON / OFF), so the reply must be correlated like any other command.
     TEMP_SET_IN = "TEMP:SET:IN"
+    TEMP_LIM = "TEMP:LIM?"  # setpoint range and bath limits the PLC enforces
 
     # Valves are parameterized by number, appended after a comma
     # (e.g. "OUTP:VALV OPEN,1"). Firmware accepts valve number 1 only.
@@ -207,6 +209,17 @@ def parse_value(line: str) -> float | None:
         return float(line)
     except ValueError:
         return None
+
+
+def parse_temp_limits(line: str) -> TempLimits | None:
+    """Parse a TEMP:LIM? reply ``<setpoint min>,<setpoint max>,<bath limit>,<bath clear>``; None if malformed."""
+    values = [parse_value(part) for part in line.split(",")]
+    if len(values) != 4 or any(v is None or not math.isfinite(v) for v in values):
+        return None
+    limits = TempLimits(*values)
+    if limits.setpoint_min >= limits.setpoint_max or limits.bath_clear >= limits.bath_limit:
+        return None
+    return limits
 
 
 class ErrCode:

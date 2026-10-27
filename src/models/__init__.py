@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum, auto
 
 
@@ -45,3 +46,13 @@ SENSOR_UNIT: dict[Sensor, str] = {
     Sensor.FLOW: "L/min",
     Sensor.LEVEL: "",
 }
+
+
+@dataclass(frozen=True)
+class TempLimits:
+    """Temperature limits (°C) the PLC enforces: the accepted setpoint range and the bath heater limit."""
+
+    setpoint_min: float
+    setpoint_max: float
+    bath_limit: float  # the PLC turns the heater off at or above this bath reading
+    bath_clear: float  # ...and lets it back on once the reading drops below this one

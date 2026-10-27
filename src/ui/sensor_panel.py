@@ -17,8 +17,8 @@ from PySide6.QtCore import QObject, Signal
 
 from comms.plc_client import PlcClient
 from comms.protocol import parse_value
-from config.data import BATH_TEMP_CLEAR_C, BATH_TEMP_LIMIT_C
-from models import Sensor
+from config.data import DEFAULT_TEMP_LIMITS
+from models import Sensor, TempLimits
 from ui.measurement_log import MeasurementLog
 from ui.style import palette as col
 from ui.widgets.sensor_card import SensorCard
@@ -61,6 +61,7 @@ class SensorPanel(QObject):
         self._faulted_chart_sensors: set[Sensor] = set()
         # Bath reading at/over the PLC's heater limit and not yet back under the clear threshold.
         self._over_limit = False
+        self._limits = DEFAULT_TEMP_LIMITS
 
         # Wire card toggled signals to poll enable/disable and chart visibility.
         for sensor, card in self._cards.items():
@@ -140,6 +141,10 @@ class SensorPanel(QObject):
         """Return the configured display title for *sensor*'s card."""
         return self._cards[sensor].title()
 
+    def set_temp_limits(self, limits: TempLimits) -> None:
+        """Follow the bath thresholds the PLC reported."""
+        self._limits = limits
+
     def reset(self) -> None:
         """Blank all cards, clear the temperature batch and reset chart visibility.
 
@@ -185,15 +190,16 @@ class SensorPanel(QObject):
 
     def _track_bath_limit(self, temp: float) -> bool:
         """Follow the PLC's heater limit on the bath reading and log each crossing; True while over it."""
-        if not self._over_limit and temp >= BATH_TEMP_LIMIT_C:
+        limit, clear = self._limits.bath_limit, self._limits.bath_clear
+        if not self._over_limit and temp >= limit:
             self._over_limit = True
             self.log.emit(
-                f"Temperatura de camisa {temp:.1f} °C: alcanzó el límite de {BATH_TEMP_LIMIT_C:g} °C. "
-                f"El PLC apaga el calentador hasta que baje de {BATH_TEMP_CLEAR_C:g} °C."
+                f"Temperatura de camisa {temp:.1f} °C: alcanzó el límite de {limit:g} °C. "
+                f"El PLC apaga el calentador hasta que baje de {clear:g} °C."
             )
-        elif self._over_limit and temp < BATH_TEMP_CLEAR_C:
+        elif self._over_limit and temp < clear:
             self._over_limit = False
-            self.log.emit(f"Temperatura de camisa bajo {BATH_TEMP_CLEAR_C:g} °C: el PLC vuelve a permitir el calentador.")
+            self.log.emit(f"Temperatura de camisa bajo {clear:g} °C: el PLC vuelve a permitir el calentador.")
         return self._over_limit
 
     def _on_sensor_fault(self, sensor: Sensor) -> None:

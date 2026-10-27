@@ -15,7 +15,8 @@ from PySide6.QtCore import QObject, Signal
 from comms.handshake import PlcHandshake
 from comms.plc_client import PlcClient
 from comms.protocol import Evt
-from models import Sensor
+from config.data import DEFAULT_TEMP_LIMITS
+from models import Sensor, TempLimits
 from ui.actuator_panel import ActuatorPanel
 from ui.recovery_action_bar import RecoveryActionBar
 from ui.scada_state import ScadaState, STATE_CONTROLS, from_plc
@@ -81,6 +82,9 @@ class ScadaController(QObject):
         # ── State polling ───────────────────────────────────────────────────────
         self._plc.state_received.connect(self._on_state_polled)
 
+        # ── Temperature limits the PLC reports at connect.
+        self._plc.temp_limits_received.connect(self._on_temp_limits)
+
         # ── Per-sensor re-init results (the PLC's reply to a SYST:REINIT command).
         self._plc.sensor_reinit_result.connect(self._on_sensor_reinit_result)
 
@@ -133,6 +137,7 @@ class ScadaController(QObject):
         self._recovery_bar.fade_in()
         self.log.emit(f"Conectado a {self._host}:{self._port}.")
         self._transition(ScadaState.INITIALIZING)
+        self._plc.query_temp_limits()
         self._init_seq.start()
 
     def _on_tcp_disconnected(self) -> None:
@@ -144,6 +149,22 @@ class ScadaController(QObject):
         self._init_seq.abort()
         self._reset()
         self.log.emit(f"Error de conexión: {msg}")
+
+    def _on_temp_limits(self, limits: TempLimits | None) -> None:
+        """Apply the PLC's temperature limits, or keep the defaults if it does not report them."""
+        if limits is None:
+            self.log.emit("El PLC no informó sus límites de temperatura; se usan los valores por defecto.")
+            limits = DEFAULT_TEMP_LIMITS
+        else:
+            self.log.emit(
+                f"Límites del PLC: consigna {limits.setpoint_min:g}–{limits.setpoint_max:g} °C; calentador apagado "
+                f"desde {limits.bath_limit:g} °C de camisa hasta bajar de {limits.bath_clear:g} °C."
+            )
+        self._apply_temp_limits(limits)
+
+    def _apply_temp_limits(self, limits: TempLimits) -> None:
+        self._temp_control.set_limits(limits)
+        self._sensor_panel.set_temp_limits(limits)
 
     # ── Init sequence slots ───────────────────────────────────────────────────────
 
@@ -303,5 +324,6 @@ class ScadaController(QObject):
         self._sensor_panel.set_interactive(False)
         self._actuator_panel.reset()
         self._temp_control.clear()
+        self._apply_temp_limits(DEFAULT_TEMP_LIMITS)  # the next PLC may report different ones
         self._recovery_bar.reset_fade()
         self.view_disconnected.emit()
