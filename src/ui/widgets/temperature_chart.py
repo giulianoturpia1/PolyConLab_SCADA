@@ -11,8 +11,7 @@ temperature card click (through SensorPanel) enables or disables its series.
 A sensor's line is broken wherever it has no reading (a fault, a timeout, a disabled
 card or paused polling) instead of being drawn straight across the gap: each unbroken
 stretch is its own ``QLineSeries`` ("segment"), and only the sensor's first segment has
-a legend entry. Point markers are drawn only on a segment with a single point, which
-would otherwise be invisible; on a dense line they merge into a thick band.
+a legend entry. Every reading is drawn as a point marker.
 """
 
 from __future__ import annotations
@@ -107,7 +106,7 @@ class TemperatureChart(QObject):
         pen.setWidth(m.CHART_LINE_WIDTH_PX)
         seg.setPen(pen)
         seg.setMarkerSize(m.CHART_POINT_MARKER_PX)
-        seg.setPointsVisible(False)
+        seg.setPointsVisible(True)
         self._chart.addSeries(seg)
         seg.attachAxis(self._ax_x)
         seg.attachAxis(self._ax_y)
@@ -130,11 +129,6 @@ class TemperatureChart(QObject):
         self._chart.removeSeries(seg)
         seg.deleteLater()
 
-    @staticmethod
-    def _refresh_markers(seg: QLineSeries) -> None:
-        """Show the point marker only on a lone point, which draws no line of its own."""
-        seg.setPointsVisible(seg.count() == 1)
-
     # ── Public API ───────────────────────────────────────────────────────────
 
     def set_series_visible(self, idx: int, visible: bool) -> None:
@@ -156,7 +150,6 @@ class TemperatureChart(QObject):
                 self._drop_segment(seg)
             del segs[1:]
             segs[0].clear()
-            self._refresh_markers(segs[0])
         self._gap = [False] * len(_SERIES_CFG)
         self._t0 = None
         self._ax_x.setRange(0, CHART_WINDOW_S)
@@ -194,7 +187,6 @@ class TemperatureChart(QObject):
                 segs.append(self._new_segment(idx))
             self._gap[idx] = False
             segs[-1].append(t_seconds, v)
-            self._refresh_markers(segs[-1])
 
         if t_seconds >= CHART_WINDOW_S:
             window_start = t_seconds - CHART_WINDOW_S
@@ -214,7 +206,6 @@ class TemperatureChart(QObject):
                 stale += 1
             if stale:
                 seg.removePoints(0, stale)
-                self._refresh_markers(seg)
         for seg in segs[1:-1]:
             if not seg.count():
                 self._drop_segment(seg)

@@ -46,7 +46,7 @@ TEMP_CONTROL_RADIUS_PX = 4
 
 # ── Temperature chart ────────────────────────────────────────────────────────
 CHART_X_TICK_COUNT = 6  # X-axis tick labels (one every 60 s over a 300 s window)
-CHART_POINT_MARKER_PX = 6  # marker diameter, drawn only on a lone point (a line segment with one reading)
+CHART_POINT_MARKER_PX = 6  # point-marker diameter drawn on every reading
 CHART_LINE_WIDTH_PX = 2  # width of each temperature line
 
 # ── Connection settings dialog ───────────────────────────────────────────────
